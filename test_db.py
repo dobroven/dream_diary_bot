@@ -140,3 +140,17 @@ def test_count_dreams_by_title():
     assert db.count_dreams_by_title(1, "общий") == 2
     assert db.count_dreams_by_title(1, "НЕТ") == 0
     assert db.count_dreams_by_title(2, "Общий") == 1
+
+
+def test_list_all_dreams():
+    for i in range(5):
+        db.add_dream(1, f"Title {i}", f"Desc {i}")
+    db.add_dream(2, "Other", "other")
+
+    rows = db.list_all_dreams(1)
+    assert len(rows) == 5
+    assert rows[0]["title"] == "Title 4"  # newest first
+
+    rows2 = db.list_all_dreams(2)
+    assert len(rows2) == 1
+    assert rows2[0]["title"] == "Other"

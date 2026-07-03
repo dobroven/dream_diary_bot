@@ -89,6 +89,24 @@ def count_dreams(user_id: int) -> int:
         return 0
 
 
+def list_all_dreams(user_id: int) -> list[sqlite3.Row]:
+    """Return ALL dreams for a user (no pagination)."""
+    try:
+        with get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT id, date, title, description
+                FROM dreams
+                WHERE user_id = ?
+                ORDER BY date DESC, id DESC
+                """,
+                (user_id,),
+            ).fetchall()
+    except sqlite3.Error as e:
+        log.exception("Ошибка при загрузке всех снов: %s", e)
+        return []
+
+
 def search_dreams(user_id: int, query: str) -> list[sqlite3.Row]:
     """Case-insensitive search across title + description.
 

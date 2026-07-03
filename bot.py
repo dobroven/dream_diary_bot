@@ -9,6 +9,7 @@ Dream Diary Bot
 /cancel  — отменить текущее действие
 """
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ from telegram.ext import (
     filters,
 )
 
+import ai
 import db
 
 logging.basicConfig(
@@ -96,6 +98,7 @@ def main_menu_markup() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🗑 Удалить", callback_data="menu:delete"),
+            InlineKeyboardButton("🗺 Карта снов", callback_data="menu:map"),
         ],
     ]
     return InlineKeyboardMarkup(buttons)
@@ -354,6 +357,9 @@ async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
+    if action == "map":
+        await cmd_map(update, ctx)
+        return
 
 # ── Generic text receiver for search / delete after button press ───────────────
 async def receive_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -478,6 +484,75 @@ async def cmd_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]]),
         )
+
+
+# ── /map — Dream Map ──────────────────────────────────────────────────────────
+async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    total = db.count_dreams(user_id)
+    if total == 0:
+        text = _esc(f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить».")
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+        else:
+            await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+        return
+
+    query = update.callback_query
+    await query.edit_message_text(
+        _esc("🗺 Составляю карту твоих снов… это может занять до минуты."),
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
+
+    try:
+        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id)
+    except Exception as e:
+        log.exception("Ошибка при генерации карты снов: %s", e)
+        await query.edit_message_text(
+            _esc("❌ Произошла ошибка при составлении карты. Попробуй позже."),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+
+    if not patterns:
+        await query.edit_message_text(
+            _esc("🗺 Повторяющихся паттернов не найдено. Добавь ещё снов и попробуй снова."),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+
+    lines = [f"🗺 *Карта сновидений*\nВсего снов: {total}\n"]
+    for p in patterns:
+        pattern = _esc(p.get("pattern", "?"))
+        count = p.get("count", 0)
+        desc = _esc(p.get("description", ""))
+        examples = p.get("examples", [])
+        lines.append(f"🔁 *{pattern}* — {count} сн.")
+        if desc:
+            lines.append(desc)
+        for ex in examples[:2]:
+            lines.append(f"▸ {_esc(ex)}")
+        lines.append("")
+
+    text = "\n".join(lines)
+
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]])
+    if len(text) <= 4096:
+        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=markup)
+        return
+
+    parts = []
+    while len(text) > 4096:
+        idx = text.rfind("\n", 0, 4096)
+        if idx == -1:
+            idx = 4096
+        parts.append(text[:idx])
+        text = text[idx:].lstrip("\n")
+    parts.append(text)
+
+    await query.edit_message_text(parts[0], parse_mode=ParseMode.MARKDOWN_V2)
+    for part in parts[1:]:
+        await query.message.reply_text(part, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────

@@ -49,28 +49,22 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
-        f"{BOOK} *Dream Diary Bot — справка*\n\n"
-        f"*/start* — главное меню\n"
-        f"*/add* — записать новый сон (название → описание)\n"
-        f"*/list* — список последних снов (с пагинацией)\n"
-        f"*/search <запрос>* — поиск по ключевым словам\n"
-        f"*/delete <#N|название>* — удалить сон по номеру или названию\n"
-        f"*/cancel* — отменить текущее действие\n"
-        f"*/help* — эта справка\n\n"
+        f"{BOOK} <b>Dream Diary Bot — справка</b>\n\n"
+        f"/start — главное меню\n"
+        f"/add — записать новый сон (название → описание)\n"
+        f"/list — список последних снов (с пагинацией)\n"
+        f"/search &lt;запрос&gt; — поиск по ключевым словам\n"
+        f"/delete &lt;#N|название&gt; — удалить сон по номеру или названию\n"
+        f"/cancel — отменить текущее действие\n"
+        f"/help — эта справка\n\n"
         f"Также можно пользоваться кнопками в главном меню 🏠"
     )
     if update.message:
-        await update.message.reply_text(
-            _esc(text),
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     else:
         query = update.callback_query
         await query.answer()
-        await query.message.reply_text(
-            _esc(text),
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+        await query.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
 async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

@@ -47,7 +47,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Conversation states ───────────────────────────────────────────────────────
-TITLE, DESCRIPTION = range(2)
+TITLE, DESCRIPTION, EDIT_TITLE, EDIT_DESC, EDIT_DATE = range(5)
 
 # ── Pagination page size ──────────────────────────────────────────────────────
 PAGE_SIZE = 5
@@ -307,8 +307,9 @@ async def view_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
         text = dream_card(row)
+        edit_button = InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit:{dream_id}")
         back_button = InlineKeyboardButton("◀️ Назад к списку", callback_data="back_to_list")
-        markup = InlineKeyboardMarkup([[back_button]])
+        markup = InlineKeyboardMarkup([[edit_button], [back_button]])
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=markup)
     except Exception as e:
         log.exception("Ошибка в view_callback: %s", e)
@@ -581,6 +582,203 @@ async def map_model_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         await query.message.reply_text(part, parse_mode=ParseMode.HTML)
 
 
+# ── Edit — ConversationHandler ───────────────────────────────────────────────
+async def edit_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for edit via button."""
+    query = update.callback_query
+    await query.answer()
+    dream_id = int(query.data.split(":")[1])
+    user_id = update.effective_user.id
+    row = db.get_dream(user_id, dream_id)
+    if not row:
+        await query.edit_message_text(
+            _esc("⚠️ Сон не найден или не принадлежит вам."),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return ConversationHandler.END
+
+    ctx.user_data["edit_dream_id"] = dream_id
+    ctx.user_data["edit_title"] = row["title"]
+    ctx.user_data["edit_desc"] = row["description"]
+    ctx.user_data["edit_date"] = row["date"]
+
+    current = (
+        f"✏️ *Редактирование сна*\n\n"
+        f"Текущее название: *{_esc(row['title'])}*\n"
+        f"Текущее описание: {_esc(row['description'])}\n"
+        f"Текущая дата: {_esc(row['date'])}\n\n"
+        f"Напиши новое название (или отправь «.» чтобы оставить текущее):"
+    )
+    await query.edit_message_text(current, parse_mode=ParseMode.MARKDOWN_V2)
+    return EDIT_TITLE
+
+
+async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for edit via /edit #N."""
+    if not ctx.args or not ctx.args[0].strip():
+        await update.message.reply_text(
+            _esc("✏️ Укажи номер сна (например: /edit #1):"),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return ConversationHandler.END
+
+    input_text = ctx.args[0].strip()
+    user_id = update.effective_user.id
+
+    if input_text.startswith("#"):
+        try:
+            idx = int(input_text.lstrip("#"))
+        except ValueError:
+            await update.message.reply_text(
+                _esc("✏️ Укажи корректный номер сна (пример: /edit #1)."),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return ConversationHandler.END
+        offset = ctx.user_data.get("list_offset", 0)
+        rows = db.list_dreams(user_id, limit=PAGE_SIZE, offset=offset)
+        page_index = idx - offset - 1
+        if 0 <= page_index < len(rows):
+            dream_id = rows[page_index]["id"]
+        else:
+            await update.message.reply_text(
+                _esc(f"⚠️ Сон с номером #{idx} не найден на текущей странице."),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return ConversationHandler.END
+    else:
+        title = input_text
+        count = db.count_dreams_by_title(user_id, title)
+        if count == 0:
+            await update.message.reply_text(
+                _esc(f"⚠️ Сон с названием *{_esc(title)}* не найден."),
+                parse_mode=ParseMode.MARKDOWN_V2,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]]),
+            )
+            return ConversationHandler.END
+        if count > 1:
+            await update.message.reply_text(
+                _esc(f"⚠️ Найдено {count} снов с таким названием. Используй номер, например #1."),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return ConversationHandler.END
+        row = db.get_dream_by_title(user_id, title)
+        if not row:
+            await update.message.reply_text(
+                _esc("⚠️ Сон не найден."),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return ConversationHandler.END
+        dream_id = row["id"]
+
+    row = db.get_dream(user_id, dream_id)
+    ctx.user_data["edit_dream_id"] = dream_id
+    ctx.user_data["edit_title"] = row["title"]
+    ctx.user_data["edit_desc"] = row["description"]
+    ctx.user_data["edit_date"] = row["date"]
+
+    current = (
+        f"✏️ *Редактирование сна*\n\n"
+        f"Текущее название: *{_esc(row['title'])}*\n"
+        f"Текущее описание: {_esc(row['description'])}\n"
+        f"Текущая дата: {_esc(row['date'])}\n\n"
+        f"Напиши новое название (или отправь «.» чтобы оставить текущее):"
+    )
+    await update.message.reply_text(current, parse_mode=ParseMode.MARKDOWN_V2)
+    return EDIT_TITLE
+
+
+async def edit_title(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    if text and text != ".":
+        if len(text) > 120:
+            await update.message.reply_text(
+                _esc("⚠️ Название слишком длинное (макс. 120 символов). Попробуй ещё раз:"),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return EDIT_TITLE
+        ctx.user_data["edit_title"] = text
+    await update.message.reply_text(
+        _esc(f"Название: *{_esc(ctx.user_data['edit_title'])}*\n\nТеперь напиши описание (или «.» чтобы оставить текущее):"),
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
+    return EDIT_DESC
+
+
+async def edit_desc(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    if text and text != ".":
+        if len(text) > 2000:
+            await update.message.reply_text(
+                _esc("⚠️ Описание слишком длинное (макс. 2000 символов). Попробуй ещё раз:"),
+                parse_mode=ParseMode.MARKDOWN_V2,
+            )
+            return EDIT_DESC
+        ctx.user_data["edit_desc"] = text
+    current_date = ctx.user_data["edit_date"]
+    await update.message.reply_text(
+        _esc(f"Описание сохранено.\n\nТекущая дата: {current_date}\nНапиши новую дату в формате ДД.ММ.ГГГГ или ГГГГ-ММ-ДД (или «.» чтобы оставить):"),
+        parse_mode=ParseMode.MARKDOWN_V2,
+    )
+    return EDIT_DATE
+
+
+def _parse_date(raw: str) -> str | None:
+    """Parse user input into YYYY-MM-DD or return None."""
+    from datetime import date, datetime
+
+    raw = raw.strip()
+    if not raw or raw == ".":
+        return None  # keep current
+    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
+async def edit_date(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
+    raw = update.message.text.strip()
+    parsed = _parse_date(raw)
+    if raw != "." and parsed is None:
+        await update.message.reply_text(
+            _esc("⚠️ Неверный формат даты. Используй ДД.ММ.ГГГГ или ГГГГ-ММ-ДД (или «.» чтобы оставить):"),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return EDIT_DATE
+
+    if parsed:
+        ctx.user_data["edit_date"] = parsed
+
+    user_id = update.effective_user.id
+    dream_id = ctx.user_data["edit_dream_id"]
+    title = ctx.user_data["edit_title"]
+    desc = ctx.user_data["edit_desc"]
+    dream_date = ctx.user_data["edit_date"]
+
+    ok = db.update_dream(user_id, dream_id, title, desc, dream_date)
+    if not ok:
+        await update.message.reply_text(
+            _esc("❌ Произошла ошибка при сохранении. Попробуй ещё раз."),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return ConversationHandler.END
+
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("◀️ Назад к списку", callback_data="back_to_list")],
+        [InlineKeyboardButton("🏠 Главная", callback_data="menu:main")],
+    ])
+    await update.message.reply_text(
+        f"✅ *Сон обновлён*\n\n"
+        f"*{_esc(title)}*\n"
+        f"📅 {_esc(dream_date)}",
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=markup,
+    )
+    return ConversationHandler.END
+
+
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 def main() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -626,6 +824,22 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(back_to_list_callback, pattern=r"^back_to_list$"))
     app.add_handler(CallbackQueryHandler(pagination_callback, pattern=r"^list:\d+$"))
     app.add_handler(CallbackQueryHandler(map_model_callback, pattern=r"^map:(deepseek|qwen)$"))
+
+    # /edit conversation
+    edit_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("edit", cmd_edit),
+            CallbackQueryHandler(edit_callback, pattern=r"^edit:\d+$"),
+        ],
+        states={
+            EDIT_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_title)],
+            EDIT_DESC:  [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_desc)],
+            EDIT_DATE:  [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_date)],
+        },
+        fallbacks=[CommandHandler("cancel", cmd_cancel)],
+    )
+    app.add_handler(edit_handler)
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_text))
 
     log.info("Бот запущен")

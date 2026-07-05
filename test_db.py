@@ -142,6 +142,23 @@ def test_count_dreams_by_title():
     assert db.count_dreams_by_title(2, "Общий") == 1
 
 
+def test_update_dream():
+    dream_id = db.add_dream(1, "Old Title", "Old Description", "2024-01-01")
+    assert dream_id is not None
+
+    ok = db.update_dream(1, dream_id, "New Title", "New Description", "2024-06-15")
+    assert ok is True
+
+    row = db.get_dream(1, dream_id)
+    assert row["title"] == "New Title"
+    assert row["description"] == "New Description"
+    assert row["date"] == "2024-06-15"
+
+    # wrong user
+    ok2 = db.update_dream(999, dream_id, "X", "Y", "2024-01-01")
+    assert ok2 is False
+
+
 def test_list_all_dreams():
     for i in range(5):
         db.add_dream(1, f"Title {i}", f"Desc {i}")

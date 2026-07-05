@@ -230,6 +230,25 @@ def count_dreams_by_title(user_id: int, title: str) -> int:
     return sum(1 for row in rows if row["title"].casefold() == title_key)
 
 
+def update_dream(user_id: int, dream_id: int, title: str, description: str, dream_date: str) -> bool:
+    """Update title, description and date of a dream. Returns True on success."""
+    try:
+        with get_connection() as conn:
+            cur = conn.execute(
+                """
+                UPDATE dreams
+                SET title = ?, description = ?, date = ?
+                WHERE user_id = ? AND id = ?
+                """,
+                (title, description, dream_date, user_id, dream_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+    except sqlite3.Error as e:
+        log.exception("Ошибка при обновлении сна: %s", e)
+        return False
+
+
 def delete_dream(user_id: int, dream_id: int) -> bool:
     """Delete a dream by its ID for the given user."""
     try:

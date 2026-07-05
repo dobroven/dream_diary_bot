@@ -13,8 +13,8 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
-BASE_URL = "https://api.groq.com/openai/v1"
-MODEL = "mixtral-8x7b-32768"
+BASE_URL = "https://openrouter.ai/api/v1"
+MODEL = "qwen/qwen3-30b"
 
 _client = None
 
@@ -23,7 +23,7 @@ def _get_client() -> OpenAI:
     global _client
     if _client is None:
         _client = OpenAI(
-            api_key=os.environ.get("GROQ_API_KEY"),
+            api_key=os.environ.get("OPENROUTER_API_KEY"),
             base_url=BASE_URL,
         )
     return _client

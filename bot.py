@@ -607,7 +607,7 @@ async def edit_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         f"Текущее название: *{_esc(row['title'])}*\n"
         f"Текущее описание: {_esc(row['description'])}\n"
         f"Текущая дата: {_esc(row['date'])}\n\n"
-        f"Напиши новое название (или отправь «.» чтобы оставить текущее):"
+        f"Напиши новое название {_esc('(или отправь «.» чтобы оставить текущее):')}"
     )
     await query.edit_message_text(current, parse_mode=ParseMode.MARKDOWN_V2)
     return EDIT_TITLE
@@ -617,7 +617,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point for edit via /edit #N."""
     if not ctx.args or not ctx.args[0].strip():
         await update.message.reply_text(
-            _esc("✏️ Укажи номер сна (например: /edit #1):"),
+            _esc("✏️ Укажи номер сна ") + _esc("(например: /edit #1):"),
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return ConversationHandler.END
@@ -681,7 +681,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
         f"Текущее название: *{_esc(row['title'])}*\n"
         f"Текущее описание: {_esc(row['description'])}\n"
         f"Текущая дата: {_esc(row['date'])}\n\n"
-        f"Напиши новое название (или отправь «.» чтобы оставить текущее):"
+        f"Напиши новое название {_esc('(или отправь «.» чтобы оставить текущее):')}"
     )
     await update.message.reply_text(current, parse_mode=ParseMode.MARKDOWN_V2)
     return EDIT_TITLE

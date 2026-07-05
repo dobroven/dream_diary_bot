@@ -14,7 +14,11 @@ SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://openrouter.ai/api/v1"
-MODEL = "qwen/qwen3-30b"
+
+MODELS = {
+    "deepseek": "deepseek/deepseek-chat",
+    "qwen": "qwen/qwen-2.5-72b-instruct",
+}
 
 _client = None
 
@@ -29,10 +33,11 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def _call_deepseek(system: str, user: str) -> str:
+def _call_llm(system: str, user: str, model: str) -> str:
     client = _get_client()
+    log.info("Модель: %s", model)
     response = client.chat.completions.create(
-        model=MODEL,
+        model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -41,10 +46,15 @@ def _call_deepseek(system: str, user: str) -> str:
     return response.choices[0].message.content or ""
 
 
-def generate_dream_map(user_id: int) -> list[dict]:
+def generate_dream_map(user_id: int, model_key: str = "deepseek") -> list[dict]:
     dreams = db.list_all_dreams(user_id)
     if not dreams:
         return []
+
+    model = MODELS.get(model_key)
+    if not model:
+        log.warning("Неизвестная модель %s, использую deepseek", model_key)
+        model = MODELS["deepseek"]
 
     prompt_text = DREAM_MAP_PATH.read_text(encoding="utf-8")
     summary = SUMMARY_PATH.read_text(encoding="utf-8") if SUMMARY_PATH.exists() else ""
@@ -63,19 +73,20 @@ def generate_dream_map(user_id: int) -> list[dict]:
         user_content = "=== База знаний ===\n" + summary + "\n\n" + user_content
 
     log.info(
-        "Запрашиваю карту снов для user_id=%d (%d снов, ~%d символов контекста)",
+        "Запрашиваю карту снов для user_id=%d (%s, %d снов, ~%d символов контекста)",
         user_id,
+        model_key,
         len(dreams),
         len(user_content),
     )
 
-    raw = _call_deepseek(prompt_text, user_content).strip()
+    raw = _call_llm(prompt_text, user_content, model).strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        log.exception("Невалидный JSON от DeepSeek: %s", e)
+        log.exception("Невалидный JSON от %s: %s", model_key, e)
         log.debug("Ответ модели: %s", raw[:500])
         return []
 

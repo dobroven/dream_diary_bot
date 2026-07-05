@@ -499,13 +499,39 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     query = update.callback_query
+    buttons = [
+        [InlineKeyboardButton("🧠 DeepSeek V3", callback_data="map:deepseek")],
+        [InlineKeyboardButton("🤖 Qwen 2.5 72B", callback_data="map:qwen")],
+        [InlineKeyboardButton("🏠 Главная", callback_data="menu:main")],
+    ]
     await query.edit_message_text(
-        "🗺 Составляю карту твоих снов… это может занять до минуты.",
+        "🗺 <b>Карта снов</b>\n\nВыбери модель для анализа:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+MODEL_LABELS = {
+    "deepseek": "🧠 DeepSeek V3",
+    "qwen": "🤖 Qwen 2.5 72B",
+}
+
+
+async def map_model_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    model_key = query.data.split(":")[1]
+
+    await query.edit_message_text(
+        f"🗺 {MODEL_LABELS.get(model_key, model_key)} — составляю карту твоих снов… это может занять до минуты.",
         parse_mode=ParseMode.HTML,
     )
 
+    user_id = update.effective_user.id
+    total = db.count_dreams(user_id)
+
     try:
-        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id)
+        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id, model_key)
     except Exception as e:
         log.exception("Ошибка при генерации карты снов: %s", e)
         await query.edit_message_text(
@@ -521,7 +547,7 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    lines = [f"🗺 <b>Карта сновидений</b>\nВсего снов: {total}\n"]
+    lines = [f"🗺 <b>Карта сновидений</b> ({MODEL_LABELS.get(model_key, model_key)})\nВсего снов: {total}\n"]
     for p in patterns:
         pattern = p.get("pattern", "?")
         count = p.get("count", 0)
@@ -599,6 +625,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(view_callback, pattern=r"^view:"))
     app.add_handler(CallbackQueryHandler(back_to_list_callback, pattern=r"^back_to_list$"))
     app.add_handler(CallbackQueryHandler(pagination_callback, pattern=r"^list:\d+$"))
+    app.add_handler(CallbackQueryHandler(map_model_callback, pattern=r"^map:(deepseek|qwen)$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_text))
 
     log.info("Бот запущен")

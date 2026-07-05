@@ -1,0 +1,105 @@
+import asyncio
+import logging
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
+from telegram.ext import ContextTypes
+
+import ai
+import db
+from utils import _esc, BOOK
+
+log = logging.getLogger(__name__)
+
+MODEL_LABELS = {
+    "deepseek": "🧠 DeepSeek V3",
+    "qwen": "🤖 Qwen 2.5 72B",
+}
+
+
+async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    total = db.count_dreams(user_id)
+    if total == 0:
+        text = f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить»."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        return
+
+    query = update.callback_query
+    buttons = [
+        [InlineKeyboardButton("🧠 DeepSeek V3", callback_data="map:deepseek")],
+        [InlineKeyboardButton("🤖 Qwen 2.5 72B", callback_data="map:qwen")],
+        [InlineKeyboardButton("🏠 Главная", callback_data="menu:main")],
+    ]
+    await query.edit_message_text(
+        "🗺 <b>Карта снов</b>\n\nВыбери модель для анализа:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def map_model_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    model_key = query.data.split(":")[1]
+
+    await query.edit_message_text(
+        f"🗺 {MODEL_LABELS.get(model_key, model_key)} — составляю карту твоих снов… это может занять до минуты.",
+        parse_mode=ParseMode.HTML,
+    )
+
+    user_id = update.effective_user.id
+    total = db.count_dreams(user_id)
+
+    try:
+        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id, model_key)
+    except Exception as e:
+        log.exception("Ошибка при генерации карты снов: %s", e)
+        await query.edit_message_text(
+            "❌ Произошла ошибка при составлении карты. Попробуй позже.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if not patterns:
+        await query.edit_message_text(
+            "🗺 Повторяющихся паттернов не найдено. Добавь ещё снов и попробуй снова.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    lines = [f"🗺 <b>Карта сновидений</b> ({MODEL_LABELS.get(model_key, model_key)})\nВсего снов: {total}\n"]
+    for p in patterns:
+        pattern = p.get("pattern", "?")
+        count = p.get("count", 0)
+        desc = p.get("description", "")
+        examples = p.get("examples", [])
+        lines.append(f"🔁 <b>{pattern}</b> — {count} сн.")
+        if desc:
+            lines.append(desc)
+        for ex in examples[:2]:
+            lines.append(f"▸ {ex}")
+        lines.append("")
+
+    text = "\n".join(lines)
+
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]])
+    if len(text) <= 4096:
+        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
+        return
+
+    parts = []
+    while len(text) > 4096:
+        idx = text.rfind("\n", 0, 4096)
+        if idx == -1:
+            idx = 4096
+        parts.append(text[:idx])
+        text = text[idx:].lstrip("\n")
+    parts.append(text)
+
+    await query.edit_message_text(parts[0], parse_mode=ParseMode.HTML)
+    for part in parts[1:]:
+        await query.message.reply_text(part, parse_mode=ParseMode.HTML)

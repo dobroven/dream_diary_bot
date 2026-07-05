@@ -14,7 +14,7 @@ SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://api.groq.com/openai/v1"
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "llama3-70b-8192"
 
 _client = None
 

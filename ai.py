@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 
-from google import genai as genai_client
+from openai import OpenAI
 
 import db
 
@@ -14,35 +14,32 @@ BOOKS_DIR = PROMPTS_DIR / "books"
 COMPILED_PATH = PROMPTS_DIR / "compiled_books.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
-COMPILE_PROMPT = """Ты — специалист по анализу сновидений. Прочитай приложенную книгу и извлеки из неё:
-
-1. **Концепции** — ключевые идеи о природе и структуре сновидений
-2. **Техники** — методы анализа и интерпретации снов
-3. **Особенности** — важные нюансы, которые нужно учитывать при разборе снов
-4. **Методы поиска паттернов** — как выявлять повторяющиеся элементы, символы, сюжеты
-
-Скомпилируй в краткий структурированный конспект.
-Конспект будет использован как база знаний для поиска повторяющихся признаков в дневнике снов пользователя.
-
-Формат: Markdown, русский язык."""
+BASE_URL = "https://openrouter.ai/api/v1"
+MODEL = "deepseek/deepseek-chat"
 
 _client = None
 
 
-def _get_client():
+def _get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = genai_client.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        _client = OpenAI(
+            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            base_url=BASE_URL,
+        )
     return _client
 
 
-def _call_gemini(contents: list[str]) -> str:
+def _call_openrouter(system: str, user: str) -> str:
     client = _get_client()
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=contents,
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
     )
-    return response.text
+    return response.choices[0].message.content or ""
 
 
 def extract_docx_text(path: str | Path) -> str:
@@ -67,8 +64,10 @@ def compile_books() -> str:
 
     full_text = "\n\n".join(book_texts)
 
+    system_prompt = """Ты — специалист по анализу сновидений. Извлеки из книги ключевые концепции, техники анализа, особенности и методы поиска паттернов сновидений. Скомпилируй в краткий структурированный конспект. Конспект будет использован как база знаний для поиска повторяющихся признаков в дневнике снов пользователя. Формат: Markdown, русский язык."""
+
     log.info("Отправляю книгу на компиляцию (%d символов)", len(full_text))
-    result = _call_gemini([COMPILE_PROMPT, full_text]).strip()
+    result = _call_openrouter(system_prompt, full_text)
     COMPILED_PATH.write_text(result, encoding="utf-8")
     log.info("Скомпилировано в %s (%d символов)", COMPILED_PATH, len(result))
     return result
@@ -97,26 +96,27 @@ def generate_dream_map(user_id: int) -> list[dict]:
             f"Описание: {row['description']}\n\n"
         )
 
-    contents = [prompt_text]
+    user_content = dreams_text
     if compiled:
-        contents.append("=== База знаний ===\n" + compiled)
-    contents.append(dreams_text)
+        user_content = "=== База знаний ===\n" + compiled + "\n\n" + user_content
 
     log.info(
         "Запрашиваю карту снов для user_id=%d (%d снов, ~%d символов контекста)",
         user_id,
         len(dreams),
-        sum(len(c) for c in contents),
+        len(user_content),
     )
 
-    raw = _call_gemini(contents).strip()
+    raw = _call_openrouter(prompt_text, user_content)
+
+    raw = raw.strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        log.exception("Невалидный JSON от Gemini: %s", e)
-        log.debug("Ответ Gemini: %s", raw[:500])
+        log.exception("Невалидный JSON от DeepSeek: %s", e)
+        log.debug("Ответ модели: %s", raw[:500])
         return []
 
     if not isinstance(data, list):

@@ -3,7 +3,8 @@ import logging
 import os
 from pathlib import Path
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
 import db
 
@@ -13,32 +14,28 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
-BASE_URL = "https://openrouter.ai/api/v1"
-MODEL = "deepseek/deepseek-chat"
+MODEL = "gemini-2.0-flash"
 
 _client = None
 
 
-def _get_client() -> OpenAI:
+def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        _client = OpenAI(
-            api_key=os.environ.get("OPENROUTER_API_KEY"),
-            base_url=BASE_URL,
-        )
+        _client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     return _client
 
 
-def _call_openrouter(system: str, user: str) -> str:
+def _call_gemini(system: str, user: str) -> str:
     client = _get_client()
-    response = client.chat.completions.create(
+    response = client.models.generate_content(
         model=MODEL,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+        ),
     )
-    return response.choices[0].message.content or ""
+    return response.text
 
 
 def generate_dream_map(user_id: int) -> list[dict]:
@@ -69,14 +66,13 @@ def generate_dream_map(user_id: int) -> list[dict]:
         len(user_content),
     )
 
-    raw = _call_openrouter(prompt_text, user_content)
-    raw = raw.strip()
+    raw = _call_gemini(prompt_text, user_content).strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        log.exception("Невалидный JSON от DeepSeek: %s", e)
+        log.exception("Невалидный JSON от Gemini: %s", e)
         log.debug("Ответ модели: %s", raw[:500])
         return []
 

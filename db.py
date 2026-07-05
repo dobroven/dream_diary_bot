@@ -196,23 +196,17 @@ def delete_dream_by_title(user_id: int, title: str) -> bool:
                 """,
                 (user_id,),
             ).fetchall()
-    except sqlite3.Error as e:
-        log.exception("Ошибка при удалении сна по заголовку: %s", e)
-        return False
-
-    for row in rows:
-        if row["title"].casefold() == title_key:
-            try:
-                with get_connection() as conn:
+            for row in rows:
+                if row["title"].casefold() == title_key:
                     cur = conn.execute(
                         "DELETE FROM dreams WHERE user_id = ? AND id = ?",
                         (user_id, row["id"]),
                     )
                     conn.commit()
                     return cur.rowcount > 0
-            except sqlite3.Error as e:
-                log.exception("Ошибка при удалении сна: %s", e)
-                return False
+    except sqlite3.Error as e:
+        log.exception("Ошибка при удалении сна по заголовку: %s", e)
+        return False
     return False
 
 def count_dreams_by_title(user_id: int, title: str) -> int:

@@ -76,11 +76,11 @@ def dream_card(row, index: int | None = None, list_mode: bool = False, snippet_w
 
 
 def _esc(text: str) -> str:
-    """Escape MarkdownV2 special characters (except asterisks for formatting)."""
-    # Full set of MarkdownV2 reserved characters:
-    # _ * [ ] ( ) ~ ` > # + - = | { } . !
-    # We intentionally keep '*' unescaped because we use it for bold formatting.
-    for char in ['_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
+    """Escape MarkdownV2 special characters."""
+    # Must escape backslash first, then all reserved chars.
+    # '*' is included so user input can't break bold formatting;
+    # bold is done explicitly via f"*{_esc(text)}*".
+    for char in ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']:
         text = text.replace(char, f'\\{char}')
     return text
 
@@ -322,8 +322,8 @@ async def back_to_list_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) 
     query = update.callback_query
     await query.answer()
     user_id = update.effective_user.id
-    # Return to first page (offset 0). Could preserve previous offset, but simple reset.
-    await _send_list_page(update, ctx, user_id, offset=0)
+    offset = ctx.user_data.get("list_offset", 0)
+    await _send_list_page(update, ctx, user_id, offset=offset)
 
 # ── Menu callback handling ───────────────────────────────────────────────
 async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

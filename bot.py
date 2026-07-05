@@ -491,17 +491,17 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     total = db.count_dreams(user_id)
     if total == 0:
-        text = _esc(f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить».")
+        text = f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить»."
         if update.callback_query:
-            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+            await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML)
         else:
-            await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
         return
 
     query = update.callback_query
     await query.edit_message_text(
-        _esc("🗺 Составляю карту твоих снов… это может занять до минуты."),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        "🗺 Составляю карту твоих снов… это может занять до минуты.",
+        parse_mode=ParseMode.HTML,
     )
 
     try:
@@ -509,36 +509,36 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         log.exception("Ошибка при генерации карты снов: %s", e)
         await query.edit_message_text(
-            _esc("❌ Произошла ошибка при составлении карты. Попробуй позже."),
-            parse_mode=ParseMode.MARKDOWN_V2,
+            "❌ Произошла ошибка при составлении карты. Попробуй позже.",
+            parse_mode=ParseMode.HTML,
         )
         return
 
     if not patterns:
         await query.edit_message_text(
-            _esc("🗺 Повторяющихся паттернов не найдено. Добавь ещё снов и попробуй снова."),
-            parse_mode=ParseMode.MARKDOWN_V2,
+            "🗺 Повторяющихся паттернов не найдено. Добавь ещё снов и попробуй снова.",
+            parse_mode=ParseMode.HTML,
         )
         return
 
-    lines = [f"🗺 *Карта сновидений*\nВсего снов: {total}\n"]
+    lines = [f"🗺 <b>Карта сновидений</b>\nВсего снов: {total}\n"]
     for p in patterns:
-        pattern = _esc(p.get("pattern", "?"))
+        pattern = p.get("pattern", "?")
         count = p.get("count", 0)
-        desc = _esc(p.get("description", ""))
+        desc = p.get("description", "")
         examples = p.get("examples", [])
-        lines.append(f"🔁 *{pattern}* — {count} сн.")
+        lines.append(f"🔁 <b>{pattern}</b> — {count} сн.")
         if desc:
             lines.append(desc)
         for ex in examples[:2]:
-            lines.append(f"▸ {_esc(ex)}")
+            lines.append(f"▸ {ex}")
         lines.append("")
 
     text = "\n".join(lines)
 
     markup = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]])
     if len(text) <= 4096:
-        await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=markup)
+        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
         return
 
     parts = []
@@ -550,9 +550,9 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         text = text[idx:].lstrip("\n")
     parts.append(text)
 
-    await query.edit_message_text(parts[0], parse_mode=ParseMode.MARKDOWN_V2)
+    await query.edit_message_text(parts[0], parse_mode=ParseMode.HTML)
     for part in parts[1:]:
-        await query.message.reply_text(part, parse_mode=ParseMode.MARKDOWN_V2)
+        await query.message.reply_text(part, parse_mode=ParseMode.HTML)
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────

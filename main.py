@@ -41,7 +41,7 @@ from handlers.list import cmd_list, pagination_callback, view_callback, back_to_
 from handlers.search import cmd_search, receive_text
 from handlers.delete import cmd_delete
 from handlers.edit import edit_callback, cmd_edit, edit_title, edit_desc, edit_date
-from handlers.map import cmd_map, map_model_callback
+from handlers.map import cmd_map
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -102,8 +102,6 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(view_callback, pattern=r"^view:"))
     app.add_handler(CallbackQueryHandler(back_to_list_callback, pattern=r"^back_to_list$"))
     app.add_handler(CallbackQueryHandler(pagination_callback, pattern=r"^list:\d+$"))
-    app.add_handler(CallbackQueryHandler(map_model_callback, pattern=r"^map:(deepseek|qwen)$"))
-
     # /edit conversation
     edit_handler = ConversationHandler(
         entry_points=[

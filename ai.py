@@ -3,6 +3,7 @@ import logging
 import os
 from pathlib import Path
 
+import httpx
 from openai import OpenAI
 
 import db
@@ -26,9 +27,13 @@ _client = None
 def _get_client() -> OpenAI:
     global _client
     if _client is None:
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        proxy = os.environ.get("PROXY_URL", "").strip()
+        http_client = httpx.Client(proxy=proxy) if proxy else None
         _client = OpenAI(
-            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            api_key=api_key,
             base_url=BASE_URL,
+            http_client=http_client,
         )
     return _client
 

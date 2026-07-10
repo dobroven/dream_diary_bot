@@ -17,7 +17,7 @@ DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://openrouter.ai/api/v1"
 
-DEEPSEEK_MODEL = "deepseek/deepseek-chat:free"
+DEEPSEEK_MODEL = "deepseek/deepseek-chat"
 
 _client = None
 

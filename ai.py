@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import os
 from pathlib import Path
 
@@ -48,6 +49,27 @@ def _call_llm(system: str, user: str, model: str) -> str:
     return response.choices[0].message.content or ""
 
 
+def validate_dream_map(patterns: list[dict]) -> list[dict]:
+    """Страховка от несоблюдения моделью правил count>=2 и длины примеров."""
+    result = []
+    for p in patterns:
+        if p.get("count", 0) < 2:
+            continue
+
+        examples = []
+        for ex in p.get("examples", []):
+            words = ex.split()
+            if len(words) > 12:
+                ex = " ".join(words[:10]) + "…"
+            examples.append(ex)
+        p["examples"] = examples
+
+        result.append(p)
+
+    result.sort(key=lambda p: p["count"], reverse=True)
+    return result[:15]
+
+
 def generate_dream_map(user_id: int) -> list[dict]:
     dreams = db.list_all_dreams(user_id)
     if not dreams:
@@ -90,4 +112,4 @@ def generate_dream_map(user_id: int) -> list[dict]:
         log.warning("Ожидался список, получено: %s", type(data))
         return []
 
-    return data
+    return validate_dream_map(data)

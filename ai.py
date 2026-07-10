@@ -16,10 +16,7 @@ DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://openrouter.ai/api/v1"
 
-MODELS = {
-    "deepseek": "deepseek/deepseek-chat",
-    "qwen": "qwen/qwen-2.5-72b-instruct",
-}
+DEEPSEEK_MODEL = "deepseek/deepseek-chat"
 
 _client = None
 
@@ -51,15 +48,10 @@ def _call_llm(system: str, user: str, model: str) -> str:
     return response.choices[0].message.content or ""
 
 
-def generate_dream_map(user_id: int, model_key: str = "deepseek") -> list[dict]:
+def generate_dream_map(user_id: int) -> list[dict]:
     dreams = db.list_all_dreams(user_id)
     if not dreams:
         return []
-
-    model = MODELS.get(model_key)
-    if not model:
-        log.warning("Неизвестная модель %s, использую deepseek", model_key)
-        model = MODELS["deepseek"]
 
     prompt_text = DREAM_MAP_PATH.read_text(encoding="utf-8")
     summary = SUMMARY_PATH.read_text(encoding="utf-8") if SUMMARY_PATH.exists() else ""
@@ -78,20 +70,19 @@ def generate_dream_map(user_id: int, model_key: str = "deepseek") -> list[dict]:
         user_content = "=== База знаний ===\n" + summary + "\n\n" + user_content
 
     log.info(
-        "Запрашиваю карту снов для user_id=%d (%s, %d снов, ~%d символов контекста)",
+        "Запрашиваю карту снов для user_id=%d (%d снов, ~%d символов контекста)",
         user_id,
-        model_key,
         len(dreams),
         len(user_content),
     )
 
-    raw = _call_llm(prompt_text, user_content, model).strip()
+    raw = _call_llm(prompt_text, user_content, DEEPSEEK_MODEL).strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        log.exception("Невалидный JSON от %s: %s", model_key, e)
+        log.exception("Невалидный JSON от DeepSeek: %s", e)
         log.debug("Ответ модели: %s", raw[:500])
         return []
 

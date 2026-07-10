@@ -7,55 +7,35 @@ from telegram.ext import ContextTypes
 
 import ai
 import db
-from utils import _esc, BOOK
+from utils import BOOK
 
 log = logging.getLogger(__name__)
 
-MODEL_LABELS = {
-    "deepseek": "🧠 DeepSeek V3",
-    "qwen": "🤖 Qwen 2.5 72B",
-}
+MODEL_LABEL = "🧠 DeepSeek V3"
 
 
 async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.callback_query:
         await update.message.reply_text("🗺 Используй кнопку «Карта снов» в главном меню.")
         return
+
+    query = update.callback_query
     user_id = update.effective_user.id
     total = db.count_dreams(user_id)
     if total == 0:
-        await update.callback_query.edit_message_text(
+        await query.edit_message_text(
             f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить».",
             parse_mode=ParseMode.HTML,
         )
         return
-    buttons = [
-        [InlineKeyboardButton("🧠 DeepSeek V3", callback_data="map:deepseek")],
-        [InlineKeyboardButton("🤖 Qwen 2.5 72B", callback_data="map:qwen")],
-        [InlineKeyboardButton("🏠 Главная", callback_data="menu:main")],
-    ]
-    await update.callback_query.edit_message_text(
-        "🗺 <b>Карта снов</b>\n\nВыбери модель для анализа:",
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-
-
-async def map_model_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    model_key = query.data.split(":")[1]
 
     await query.edit_message_text(
-        f"🗺 {MODEL_LABELS.get(model_key, model_key)} — составляю карту твоих снов… это может занять до минуты.",
+        f"🗺 {MODEL_LABEL} — составляю карту твоих снов… это может занять до минуты.",
         parse_mode=ParseMode.HTML,
     )
 
-    user_id = update.effective_user.id
-    total = db.count_dreams(user_id)
-
     try:
-        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id, model_key)
+        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id)
     except Exception as e:
         log.exception("Ошибка при генерации карты снов: %s", e)
         await query.edit_message_text(
@@ -71,7 +51,7 @@ async def map_model_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> 
         )
         return
 
-    lines = [f"🗺 <b>Карта сновидений</b> ({MODEL_LABELS.get(model_key, model_key)})\nВсего снов: {total}\n"]
+    lines = [f"🗺 <b>Карта сновидений</b> ({MODEL_LABEL})\nВсего снов: {total}\n"]
     for p in patterns:
         pattern = p.get("pattern", "?")
         count = p.get("count", 0)

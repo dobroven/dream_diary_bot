@@ -17,7 +17,7 @@ DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://opencode.ai/zen/v1"
 
-DEEPSEEK_MODEL = "deepseek-v4-flash"
+DEEPSEEK_MODEL = "deepseek-v4-flash-free"
 
 _client = None
 

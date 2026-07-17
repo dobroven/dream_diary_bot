@@ -15,9 +15,9 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
-BASE_URL = "https://openrouter.ai/api/v1"
+BASE_URL = "https://opencode.ai/zen/v1"
 
-DEEPSEEK_MODEL = "deepseek/deepseek-chat"
+DEEPSEEK_MODEL = "deepseek-v4-flash"
 
 _client = None
 

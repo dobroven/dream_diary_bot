@@ -60,7 +60,7 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(f"🔁 <b>{pattern}</b> — {count} сн.")
         if desc:
             lines.append(desc)
-        for ex in examples[:2]:
+        for ex in examples:
             lines.append(f"▸ {ex}")
         lines.append("")
 

@@ -42,6 +42,7 @@ from handlers.search import cmd_search, receive_text
 from handlers.delete import cmd_delete
 from handlers.edit import edit_callback, cmd_edit, edit_title, edit_desc, edit_date
 from handlers.map import cmd_map
+from handlers.voice import handle_voice
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -118,6 +119,7 @@ def main() -> None:
     app.add_handler(edit_handler)
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, receive_text))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     log.info("Бот запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES, bootstrap_retries=-1)

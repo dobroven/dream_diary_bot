@@ -2,3 +2,4 @@ python-telegram-bot==21.*
 python-dotenv>=1.0
 httpx[socks]>=0.27
 openai>=1.0
+faster-whisper>=1.0

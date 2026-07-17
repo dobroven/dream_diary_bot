@@ -9,6 +9,7 @@ STAR = "✨"
 BOOK = "📖"
 MAG  = "🔍"
 TRASH = "🗑"
+VOICE = "🎤"
 
 
 def _esc(text: str) -> str:

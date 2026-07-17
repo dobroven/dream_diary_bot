@@ -4,7 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from utils import _esc, MOON, MAG, TRASH, BOOK
+from utils import _esc, MOON, MAG, TRASH, BOOK, VOICE
 
 from handlers.add import cmd_add
 from handlers.list import cmd_list
@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 def main_menu_markup() -> InlineKeyboardMarkup:
     buttons = [
         [
+            InlineKeyboardButton("🎤 Голос", callback_data="menu:voice"),
             InlineKeyboardButton("📥 Добавить", callback_data="menu:add"),
         ],
         [
@@ -94,6 +95,13 @@ async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         ctx.user_data["awaiting"] = "delete"
         await query.edit_message_text(
             _esc(f"{TRASH} Введите номер сна (например, #1) для удаления:\n"),
+            parse_mode=ParseMode.MARKDOWN_V2,
+        )
+        return
+    if action == "voice":
+        ctx.user_data.clear()
+        await query.edit_message_text(
+            f"{VOICE} {_esc('Отправь голосовое сообщение, и я распознаю его как новый сон.')}",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         return

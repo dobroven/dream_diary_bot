@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -21,7 +20,7 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = " ".join(ctx.args).strip()
     user_id = update.effective_user.id
-    rows = await asyncio.to_thread(db.search_dreams, user_id, query)
+    rows = db.search_dreams(user_id, query)
 
     if not rows:
         await update.message.reply_text(
@@ -30,7 +29,7 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    total = await asyncio.to_thread(db.count_dreams, user_id)
+    total = db.count_dreams(user_id)
     prefetch_note = ""
     if total > 1000:
         prefetch_note = f"\n_Поиск среди последних 1000 снов из {total}\\. Если не нашёл \u2014 уточни запрос\\._"

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -33,7 +32,7 @@ async def cmd_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
 
         offset = ctx.user_data.get("list_offset", 0)
-        rows = await asyncio.to_thread(db.list_dreams, user_id, PAGE_SIZE, offset)
+        rows = db.list_dreams(user_id, limit=PAGE_SIZE, offset=offset)
         page_index = idx - offset - 1
         if 0 <= page_index < len(rows):
             row = rows[page_index]
@@ -45,7 +44,7 @@ async def cmd_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             return
     else:
         title = input_text
-        count = await asyncio.to_thread(db.count_dreams_by_title, user_id, title)
+        count = db.count_dreams_by_title(user_id, title)
         if count == 0:
             await update.message.reply_text(
                 _esc(f"⚠️ Сон с названием *{_esc(title)}* не найден."),
@@ -60,7 +59,7 @@ async def cmd_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]]),
             )
             return
-        row = await asyncio.to_thread(db.get_dream_by_title, user_id, title)
+        row = db.get_dream_by_title(user_id, title)
         if not row:
             await update.message.reply_text(
                 _esc("⚠️ Сон не найден."),
@@ -76,7 +75,7 @@ async def delete_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> Non
     await query.answer()
     dream_id = int(query.data.split(":")[1])
     user_id = update.effective_user.id
-    row = await asyncio.to_thread(db.get_dream, user_id, dream_id)
+    row = db.get_dream(user_id, dream_id)
     if not row:
         await query.edit_message_text(
             _esc("⚠️ Сон не найден."),
@@ -115,7 +114,7 @@ async def confirm_delete_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
 
     if action == "no":
-        row = await asyncio.to_thread(db.get_dream, user_id, dream_id)
+        row = db.get_dream(user_id, dream_id)
         if not row:
             await query.edit_message_text(
                 _esc("⚠️ Сон не найден."),
@@ -130,7 +129,7 @@ async def confirm_delete_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE
         await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=markup)
         return
 
-    deleted = await asyncio.to_thread(db.delete_dream, user_id, dream_id)
+    deleted = db.delete_dream(user_id, dream_id)
     if deleted:
         await query.edit_message_text(
             _esc(f"{TRASH} Сон удалён."),

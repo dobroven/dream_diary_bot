@@ -1,4 +1,3 @@
-import asyncio
 from textwrap import shorten
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -65,7 +64,7 @@ async def received_description(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -
     title = ctx.user_data.pop("dream_title", "—")
     user_id = update.effective_user.id
 
-    dream_id = await asyncio.to_thread(db.add_dream, user_id, title, description)
+    dream_id = db.add_dream(user_id, title, description)
 
     if dream_id is None:
         await update.message.reply_text(

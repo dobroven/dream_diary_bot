@@ -21,7 +21,7 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = update.callback_query
     user_id = update.effective_user.id
-    total = await asyncio.to_thread(db.count_dreams, user_id)
+    total = db.count_dreams(user_id)
     if total == 0:
         await query.edit_message_text(
             f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить».",

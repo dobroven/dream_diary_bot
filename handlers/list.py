@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -23,7 +22,7 @@ async def _send_list_page(
     offset: int,
 ) -> None:
     ctx.user_data["list_offset"] = offset
-    total = await asyncio.to_thread(db.count_dreams, user_id)
+    total = db.count_dreams(user_id)
     if total == 0:
         text = _esc(f"{BOOK} У тебя пока нет записанных снов. Начни с /add!")
         if update.callback_query:
@@ -31,7 +30,7 @@ async def _send_list_page(
         else:
             await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
-    rows = await asyncio.to_thread(db.list_dreams, user_id, PAGE_SIZE, offset)
+    rows = db.list_dreams(user_id, limit=PAGE_SIZE, offset=offset)
     lines = [f"{BOOK} *Твои сны* \\({total} всего\\)\n"]
     buttons: list[list[InlineKeyboardButton]] = []
     for i, row in enumerate(rows, start=offset + 1):
@@ -71,7 +70,7 @@ async def view_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         dream_id = int(query.data.split(":")[1])
         user_id = update.effective_user.id
-        row = await asyncio.to_thread(db.get_dream, user_id, dream_id)
+        row = db.get_dream(user_id, dream_id)
         if not row:
             await query.edit_message_text(
                 _esc("⚠️ Сон не найден или не принадлежит вам."),

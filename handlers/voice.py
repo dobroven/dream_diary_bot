@@ -90,7 +90,7 @@ async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             title = title[:117] + '…'
 
         user_id = update.effective_user.id
-        dream_id = db.add_dream(user_id, title, description)
+        dream_id = await asyncio.to_thread(db.add_dream, user_id, title, description)
 
         if dream_id is None:
             await status_msg.edit_text(_esc("❌ Произошла ошибка при сохранении. Попробуй ещё раз."))

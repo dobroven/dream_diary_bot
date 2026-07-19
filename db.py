@@ -107,6 +107,19 @@ def list_all_dreams(user_id: int) -> list[sqlite3.Row]:
         return []
 
 
+def _fetch_user_dreams(user_id: int, limit: int = 1000) -> list[sqlite3.Row]:
+    try:
+        with get_connection() as conn:
+            return conn.execute(
+                "SELECT id, date, title, description FROM dreams"
+                " WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+    except sqlite3.Error as e:
+        log.exception("Ошибка при загрузке снов пользователя %d: %s", user_id, e)
+        return []
+
+
 def search_dreams(user_id: int, query: str) -> list[sqlite3.Row]:
     """Case-insensitive search across title + description.
 
@@ -114,25 +127,8 @@ def search_dreams(user_id: int, query: str) -> list[sqlite3.Row]:
     so we fetch rows and filter in Python using str.casefold().
     """
     query_lower = query.casefold()
-    MAX_PREFETCH = 1000
-    try:
-        with get_connection() as conn:
-            all_rows = conn.execute(
-                """
-                SELECT id, date, title, description
-                FROM dreams
-                WHERE user_id = ?
-                ORDER BY date DESC, id DESC
-                LIMIT ?
-                """,
-                (user_id, MAX_PREFETCH),
-            ).fetchall()
-    except sqlite3.Error as e:
-        log.exception("Ошибка при поиске снов: %s", e)
-        return []
-
     return [
-        row for row in all_rows
+        row for row in _fetch_user_dreams(user_id)
         if query_lower in row["title"].casefold()
         or query_lower in row["description"].casefold()
     ][:20]
@@ -156,23 +152,7 @@ def get_dream_by_title(user_id: int, title: str) -> sqlite3.Row | None:
     Uses Python casefold for correct Cyrillic handling.
     """
     title_key = title.casefold()
-    try:
-        with get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, date, title, description
-                FROM dreams
-                WHERE user_id = ?
-                ORDER BY date DESC, id DESC
-                LIMIT 1000
-                """,
-                (user_id,),
-            ).fetchall()
-    except sqlite3.Error as e:
-        log.exception("Ошибка при получении сна по заголовку: %s", e)
-        return None
-
-    for row in rows:
+    for row in _fetch_user_dreams(user_id):
         if row["title"].casefold() == title_key:
             return row
     return None
@@ -184,50 +164,25 @@ def delete_dream_by_title(user_id: int, title: str) -> bool:
     Uses Python casefold for correct Cyrillic handling.
     """
     title_key = title.casefold()
-    try:
-        with get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, title
-                FROM dreams
-                WHERE user_id = ?
-                ORDER BY date DESC, id DESC
-                LIMIT 1000
-                """,
-                (user_id,),
-            ).fetchall()
-            for row in rows:
-                if row["title"].casefold() == title_key:
-                    cur = conn.execute(
-                        "DELETE FROM dreams WHERE user_id = ? AND id = ?",
-                        (user_id, row["id"]),
-                    )
-                    conn.commit()
-                    return cur.rowcount > 0
-    except sqlite3.Error as e:
-        log.exception("Ошибка при удалении сна по заголовку: %s", e)
-        return False
+    for row in _fetch_user_dreams(user_id):
+        if row["title"].casefold() == title_key:
+            with get_connection() as conn:
+                cur = conn.execute(
+                    "DELETE FROM dreams WHERE user_id = ? AND id = ?",
+                    (user_id, row["id"]),
+                )
+                conn.commit()
+                return cur.rowcount > 0
     return False
+
 
 def count_dreams_by_title(user_id: int, title: str) -> int:
     """Count dreams whose title matches (case‑insensitive)."""
     title_key = title.casefold()
-    try:
-        with get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT title
-                FROM dreams
-                WHERE user_id = ?
-                ORDER BY date DESC, id DESC
-                LIMIT 1000
-                """,
-                (user_id,),
-            ).fetchall()
-    except sqlite3.Error as e:
-        log.exception("Ошибка при подсчёте снов по заголовку: %s", e)
-        return 0
-    return sum(1 for row in rows if row["title"].casefold() == title_key)
+    return sum(
+        1 for row in _fetch_user_dreams(user_id)
+        if row["title"].casefold() == title_key
+    )
 
 
 def update_dream(user_id: int, dream_id: int, title: str, description: str, dream_date: str) -> bool:

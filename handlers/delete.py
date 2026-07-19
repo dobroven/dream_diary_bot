@@ -92,7 +92,7 @@ async def _send_delete_confirm(
     text = (
         f"{TRASH} *Удалить сон?*\n\n"
         f"{dream_card(row)}\n\n"
-        f"Это действие необратимо."
+        f"{_esc('Это действие необратимо.')}"
     )
     markup = InlineKeyboardMarkup([
         [

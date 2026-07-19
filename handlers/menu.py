@@ -15,15 +15,13 @@ log = logging.getLogger(__name__)
 
 def main_menu_markup() -> InlineKeyboardMarkup:
     buttons = [
+        [InlineKeyboardButton("🎤 Голос", callback_data="menu:voice")],
         [
-            InlineKeyboardButton("🎤 Голос", callback_data="menu:voice"),
             InlineKeyboardButton("📥 Добавить", callback_data="menu:add"),
-        ],
-        [
             InlineKeyboardButton("📄 Список", callback_data="menu:list"),
-            InlineKeyboardButton("🔍 Поиск", callback_data="menu:search"),
         ],
         [
+            InlineKeyboardButton("🔍 Поиск", callback_data="menu:search"),
             InlineKeyboardButton("🗺 Карта снов", callback_data="menu:map"),
         ],
     ]

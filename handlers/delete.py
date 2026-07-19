@@ -109,8 +109,8 @@ async def confirm_delete_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     parts = query.data.split(":")
-    action = parts[1]
-    dream_id = int(parts[2])
+    dream_id = int(parts[1])
+    action = parts[2]
     user_id = update.effective_user.id
 
     if action == "no":

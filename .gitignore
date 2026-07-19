@@ -7,5 +7,6 @@ __pycache__/
 CLAUDE.md
 opencode.json
 DEEPSEEK.md
+proxy_config.json
 ssh-key-*
 ~

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -6,7 +7,6 @@ from telegram.ext import ContextTypes
 
 import db
 from utils import _esc, MAG, dream_card
-from handlers.delete import cmd_delete
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     query = " ".join(ctx.args).strip()
     user_id = update.effective_user.id
-    rows = db.search_dreams(user_id, query)
+    rows = await asyncio.to_thread(db.search_dreams, user_id, query)
 
     if not rows:
         await update.message.reply_text(
@@ -30,7 +30,7 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    total = db.count_dreams(user_id)
+    total = await asyncio.to_thread(db.count_dreams, user_id)
     prefetch_note = ""
     if total > 1000:
         prefetch_note = f"\n_Поиск среди последних 1000 снов из {total}\\. Если не нашёл \u2014 уточни запрос\\._"
@@ -62,8 +62,4 @@ async def receive_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if awaiting == "search":
         ctx.args = update.message.text.split()
         await cmd_search(update, ctx)
-        return
-    if awaiting == "delete":
-        ctx.args = [update.message.text.strip()]
-        await cmd_delete(update, ctx)
         return

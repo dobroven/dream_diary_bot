@@ -39,7 +39,7 @@ from handlers.menu import cmd_start, cmd_help, menu_callback
 from handlers.add import cmd_add, received_title, received_description
 from handlers.list import cmd_list, pagination_callback, view_callback, back_to_list_callback
 from handlers.search import cmd_search, receive_text
-from handlers.delete import cmd_delete
+from handlers.delete import cmd_delete, delete_callback, confirm_delete_callback
 from handlers.edit import edit_callback, cmd_edit, edit_title, edit_desc, edit_date
 from handlers.map import cmd_map
 from handlers.voice import handle_voice
@@ -99,6 +99,8 @@ def main() -> None:
     app.add_handler(CommandHandler("list",   cmd_list))
     app.add_handler(CommandHandler("search", cmd_search))
     app.add_handler(CommandHandler("delete", cmd_delete))
+    app.add_handler(CallbackQueryHandler(delete_callback, pattern=r"^delete:\d+$"))
+    app.add_handler(CallbackQueryHandler(confirm_delete_callback, pattern=r"^confirm_delete:\d+:(yes|no)$"))
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(view_callback, pattern=r"^view:"))
     app.add_handler(CallbackQueryHandler(back_to_list_callback, pattern=r"^back_to_list$"))

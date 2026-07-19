@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 
@@ -16,7 +17,7 @@ async def edit_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     await query.answer()
     dream_id = int(query.data.split(":")[1])
     user_id = update.effective_user.id
-    row = db.get_dream(user_id, dream_id)
+    row = await asyncio.to_thread(db.get_dream, user_id, dream_id)
     if not row:
         await query.edit_message_text(
             _esc("⚠️ Сон не найден или не принадлежит вам."),
@@ -61,7 +62,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             )
             return ConversationHandler.END
         offset = ctx.user_data.get("list_offset", 0)
-        rows = db.list_dreams(user_id, limit=PAGE_SIZE, offset=offset)
+        rows = await asyncio.to_thread(db.list_dreams, user_id, PAGE_SIZE, offset)
         page_index = idx - offset - 1
         if 0 <= page_index < len(rows):
             dream_id = rows[page_index]["id"]
@@ -73,7 +74,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             return ConversationHandler.END
     else:
         title = input_text
-        count = db.count_dreams_by_title(user_id, title)
+        count = await asyncio.to_thread(db.count_dreams_by_title, user_id, title)
         if count == 0:
             await update.message.reply_text(
                 _esc(f"⚠️ Сон с названием *{_esc(title)}* не найден."),
@@ -87,7 +88,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
             return ConversationHandler.END
-        row = db.get_dream_by_title(user_id, title)
+        row = await asyncio.to_thread(db.get_dream_by_title, user_id, title)
         if not row:
             await update.message.reply_text(
                 _esc("⚠️ Сон не найден."),
@@ -96,7 +97,7 @@ async def cmd_edit(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
             return ConversationHandler.END
         dream_id = row["id"]
 
-    row = db.get_dream(user_id, dream_id)
+    row = await asyncio.to_thread(db.get_dream, user_id, dream_id)
     ctx.user_data["edit_dream_id"] = dream_id
     ctx.user_data["edit_title"] = row["title"]
     ctx.user_data["edit_desc"] = row["description"]
@@ -180,7 +181,7 @@ async def edit_date(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     desc = ctx.user_data["edit_desc"]
     dream_date = ctx.user_data["edit_date"]
 
-    ok = db.update_dream(user_id, dream_id, title, desc, dream_date)
+    ok = await asyncio.to_thread(db.update_dream, user_id, dream_id, title, desc, dream_date)
     if not ok:
         await update.message.reply_text(
             _esc("❌ Произошла ошибка при сохранении. Попробуй ещё раз."),

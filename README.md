@@ -126,7 +126,7 @@ CREATE INDEX idx_dreams_user_date ON dreams (user_id, date DESC);
 1. Получить API-ключ OpenCode Zen.
 2. Добавить в `.env`:
    ```
-   OPENROUTER_API_KEY=ваш_ключ
+    OPENCODE_API_KEY=ваш_ключ
    ```
 3. По желанию — наполнить `prompts/summary.md` конспектом по анализу сновидений (используется моделью как база знаний).
 
@@ -158,7 +158,7 @@ After=network.target
 [Service]
 WorkingDirectory=/opt/dream_diary
 Environment=TELEGRAM_BOT_TOKEN=ваш_токен
-Environment=OPENROUTER_API_KEY=ваш_ключ
+Environment=OPENCODE_API_KEY=ваш_ключ
 Environment=PROXY_URL=socks5://127.0.0.1:2080
 ExecStart=/opt/dream_diary/.venv/bin/python main.py
 Restart=on-failure

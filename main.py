@@ -60,13 +60,24 @@ async def cmd_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
-def main() -> None:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    if not token:
+def _validate_env() -> None:
+    required = {
+        "TELEGRAM_BOT_TOKEN": "Токен Telegram-бота",
+        "OPENCODE_API_KEY": "API-ключ OpenCode",
+    }
+    missing = [f"  {k} — {v}" for k, v in required.items() if not os.environ.get(k, "").strip()]
+    if missing:
         raise RuntimeError(
-            "Токен не найден. Создай файл .env рядом с main.py и добавь строку:\n"
-            "TELEGRAM_BOT_TOKEN=ваш_токен_здесь"
+            "Отсутствуют обязательные переменные окружения:\n"
+            + "\n".join(missing)
+            + "\n\nДобавьте их в файл .env рядом с main.py"
         )
+
+
+def main() -> None:
+    _validate_env()
+
+    token = os.environ["TELEGRAM_BOT_TOKEN"]
 
     db.init_db()
     log.info("База данных инициализирована")

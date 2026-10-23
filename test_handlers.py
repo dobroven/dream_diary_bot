@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
-from openai import RateLimitError
+from openai import APIStatusError, RateLimitError
 
 from handlers.map import cmd_map
 
@@ -34,7 +34,13 @@ def _message_update():
 def _rate_limit_error() -> RateLimitError:
     request = httpx.Request("POST", "https://api.zveno.ai/v1/chat/completions")
     response = httpx.Response(429, request=request)
-    return RateLimitError("daily limit", response=response, body=None)
+    return RateLimitError("rate limit", response=response, body=None)
+
+
+def _payment_required_error() -> APIStatusError:
+    request = httpx.Request("POST", "https://api.zveno.ai/v1/chat/completions")
+    response = httpx.Response(402, request=request)
+    return APIStatusError("payment required", response=response, body=None)
 
 
 @pytest.mark.asyncio
@@ -117,7 +123,20 @@ async def test_cmd_map_handles_rate_limit():
         await cmd_map(update, ctx)
 
     text = query.edit_message_text.await_args_list[-1].kwargs["text"]
-    assert "Лимит бесплатной модели" in text
+    assert "ограничил запросы" in text
+
+
+@pytest.mark.asyncio
+async def test_cmd_map_handles_payment_required():
+    update, query = _callback_update()
+    ctx = SimpleNamespace(user_data={})
+
+    with patch("handlers.map.db.count_dreams", return_value=2), \
+         patch("handlers.map.ai.generate_dream_map", side_effect=_payment_required_error()):
+        await cmd_map(update, ctx)
+
+    text = query.edit_message_text.await_args_list[-1].kwargs["text"]
+    assert "Недостаточно средств" in text
 
 
 @pytest.mark.asyncio

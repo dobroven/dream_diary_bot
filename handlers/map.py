@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from openai import RateLimitError
+from openai import APIStatusError, RateLimitError
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
@@ -95,13 +95,31 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         patterns = await asyncio.to_thread(ai.generate_dream_map, user_id)
     except RateLimitError as e:
-        log.warning("Лимит ZvenoAI при генерации карты снов: %s", e)
+        log.warning("ZvenoAI ограничил запросы при генерации карты снов: %s", e)
         await _replace(
             update,
             _esc(
-                "⏳ Лимит бесплатной модели исчерпан. Попробуй позже — "
-                "обычно он сбрасывается в 03:00 МСК."
+                "⏳ ZvenoAI временно ограничил запросы. Попробуй позже."
             ),
+            MAIN_MENU,
+        )
+        return
+    except APIStatusError as e:
+        if e.status_code == 402:
+            log.warning("Недостаточно средств на балансе ZvenoAI: %s", e)
+            await _replace(
+                update,
+                _esc(
+                    "💳 Недостаточно средств на балансе ZvenoAI. "
+                    "Пополни баланс и попробуй снова."
+                ),
+                MAIN_MENU,
+            )
+            return
+        log.exception("Ошибка API ZvenoAI при генерации карты снов: %s", e)
+        await _replace(
+            update,
+            _esc("❌ Сервис ZvenoAI вернул ошибку. Попробуй позже."),
             MAIN_MENU,
         )
         return

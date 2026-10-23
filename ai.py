@@ -16,7 +16,7 @@ SUMMARY_PATH = PROMPTS_DIR / "summary.md"
 DREAM_MAP_PATH = PROMPTS_DIR / "dream_map.md"
 
 BASE_URL = "https://api.zveno.ai/v1"
-DREAM_MAP_MODEL = "nvidia/nemotron-3.5-super-vl:free"
+DREAM_MAP_MODEL = "nvidia/nemotron-3.5-super-vl"
 
 REQUEST_TIMEOUT = 180.0
 

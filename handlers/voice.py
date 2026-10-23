@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import tempfile
+from pathlib import Path
 from textwrap import shorten
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -14,14 +15,16 @@ from utils import _esc, MOON, STAR, VOICE
 log = logging.getLogger(__name__)
 
 _model = None
+MODEL_DIR = Path.home() / ".local" / "share" / "faster-whisper" / "base"
 
 
 def get_model():
     global _model
     if _model is None:
-        log.info("Loading faster-whisper model 'base'...")
+        model_path = str(MODEL_DIR) if MODEL_DIR.is_dir() else "base"
+        log.info("Loading faster-whisper model from %s...", model_path)
         from faster_whisper import WhisperModel
-        _model = WhisperModel("base", device="cpu", compute_type="int8")
+        _model = WhisperModel(model_path, device="cpu", compute_type="int8")
         log.info("Whisper model loaded")
     return _model
 

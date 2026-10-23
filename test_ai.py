@@ -96,12 +96,13 @@ def test_generate_dream_map_uses_parser():
     ]
     raw = '```json\n[{"pattern": "полёт", "count": 2, "examples": ["летал"]}]\n```'
 
-    with patch("ai.db.list_all_dreams", return_value=dreams), \
+    with patch("ai.db.list_dreams_for_map", return_value=dreams), \
          patch("ai._call_llm", return_value=raw):
-        result = ai.generate_dream_map(1)
+        patterns, analyzed = ai.generate_dream_map(1)
 
-    assert len(result) == 1
-    assert result[0]["pattern"] == "полёт"
+    assert analyzed == 2
+    assert len(patterns) == 1
+    assert patterns[0]["pattern"] == "полёт"
 
 
 def test_get_client_requires_api_key(monkeypatch):

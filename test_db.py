@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 import os
 import tempfile
 import pytest
@@ -171,3 +172,90 @@ def test_list_all_dreams():
     rows2 = db.list_all_dreams(2)
     assert len(rows2) == 1
     assert rows2[0]["title"] == "Other"
+
+
+def test_list_dreams_for_map_uses_all_last_two_weeks():
+    today = date(2026, 10, 23)
+    for i in range(15):
+        offset = i % 14
+        db.add_dream(
+            1,
+            f"Recent {i}",
+            "desc",
+            (today - timedelta(days=offset)).isoformat(),
+        )
+    for i in range(3):
+        db.add_dream(
+            1,
+            f"Old {i}",
+            "desc",
+            (today - timedelta(days=20 + i)).isoformat(),
+        )
+
+    rows = db.list_dreams_for_map(1, today=today)
+
+    assert len(rows) == 15
+    assert all(row["title"].startswith("Recent") for row in rows)
+
+
+def test_list_dreams_for_map_window_includes_today_and_13_prior_days():
+    today = date(2026, 10, 23)
+    db.add_dream(
+        1,
+        "Too old",
+        "desc",
+        (today - timedelta(days=14)).isoformat(),
+    )
+    for i in range(14):
+        db.add_dream(
+            1,
+            f"Recent {i}",
+            "desc",
+            (today - timedelta(days=i)).isoformat(),
+        )
+
+    rows = db.list_dreams_for_map(1, today=today)
+
+    assert len(rows) == 14
+    assert all(row["title"] != "Too old" for row in rows)
+
+
+def test_list_dreams_for_map_tops_up_to_14():
+    today = date(2026, 10, 23)
+    for i in range(5):
+        db.add_dream(
+            1,
+            f"Recent {i}",
+            "desc",
+            (today - timedelta(days=i)).isoformat(),
+        )
+    for i in range(20):
+        db.add_dream(
+            1,
+            f"Old {i}",
+            "desc",
+            (today - timedelta(days=20 + i)).isoformat(),
+        )
+
+    rows = db.list_dreams_for_map(1, today=today)
+
+    assert len(rows) == 14
+    assert sum(row["title"].startswith("Recent") for row in rows) == 5
+    # Добираем самые свежие из старых: 20, 21, ..., 28 дней назад.
+    assert sum(row["title"].startswith("Old") for row in rows) == 9
+    assert rows[-1]["title"] == "Old 8"
+
+
+def test_list_dreams_for_map_returns_all_if_fewer_than_14():
+    today = date(2026, 10, 23)
+    for i in range(10):
+        db.add_dream(
+            1,
+            f"Dream {i}",
+            "desc",
+            (today - timedelta(days=i)).isoformat(),
+        )
+
+    rows = db.list_dreams_for_map(1, today=today)
+
+    assert len(rows) == 10

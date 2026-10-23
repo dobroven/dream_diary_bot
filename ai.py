@@ -162,10 +162,10 @@ def validate_dream_map(patterns: list[dict]) -> list[dict]:
     return result[:15]
 
 
-def generate_dream_map(user_id: int) -> list[dict]:
-    dreams = db.list_all_dreams(user_id)
+def generate_dream_map(user_id: int) -> tuple[list[dict], int]:
+    dreams = db.list_dreams_for_map(user_id)
     if not dreams:
-        return []
+        return [], 0
 
     prompt_text = DREAM_MAP_PATH.read_text(encoding="utf-8")
     summary = SUMMARY_PATH.read_text(encoding="utf-8") if SUMMARY_PATH.exists() else ""
@@ -191,4 +191,5 @@ def generate_dream_map(user_id: int) -> list[dict]:
     )
 
     raw = _call_llm(prompt_text, user_content, DREAM_MAP_MODEL).strip()
-    return validate_dream_map(_parse_patterns(raw))
+    patterns = validate_dream_map(_parse_patterns(raw))
+    return patterns, len(dreams)

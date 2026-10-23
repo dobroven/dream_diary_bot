@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -104,6 +104,54 @@ def list_all_dreams(user_id: int) -> list[sqlite3.Row]:
             ).fetchall()
     except sqlite3.Error as e:
         log.exception("Ошибка при загрузке всех снов: %s", e)
+        return []
+
+
+def list_dreams_for_map(
+    user_id: int,
+    days: int = 14,
+    min_count: int = 14,
+    today: date | None = None,
+) -> list[sqlite3.Row]:
+    """Сны для карты: последние `days` календарных дней, включая сегодня.
+
+    Если в окне меньше `min_count` снов, добираем более ранние, пока
+    не наберём минимум. Если всего снов меньше — возвращаем всё.
+    """
+    today = today or date.today()
+    cutoff = (today - timedelta(days=days - 1)).isoformat()
+    today_str = today.isoformat()
+
+    try:
+        with get_connection() as conn:
+            recent = conn.execute(
+                """
+                SELECT id, date, title, description
+                FROM dreams
+                WHERE user_id = ? AND date >= ? AND date <= ?
+                ORDER BY date DESC, id DESC
+                """,
+                (user_id, cutoff, today_str),
+            ).fetchall()
+
+            if len(recent) >= min_count:
+                return recent
+
+            need = min_count - len(recent)
+            earlier = conn.execute(
+                """
+                SELECT id, date, title, description
+                FROM dreams
+                WHERE user_id = ? AND date < ?
+                ORDER BY date DESC, id DESC
+                LIMIT ?
+                """,
+                (user_id, cutoff, need),
+            ).fetchall()
+
+            return recent + earlier
+    except sqlite3.Error as e:
+        log.exception("Ошибка при загрузке снов для карты: %s", e)
         return []
 
 

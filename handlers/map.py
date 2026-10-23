@@ -93,7 +93,7 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         pass
 
     try:
-        patterns = await asyncio.to_thread(ai.generate_dream_map, user_id)
+        patterns, analyzed = await asyncio.to_thread(ai.generate_dream_map, user_id)
     except RateLimitError as e:
         log.warning("ZvenoAI ограничил запросы при генерации карты снов: %s", e)
         await _replace(
@@ -145,7 +145,7 @@ async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     lines = [
         f"🗺 *Карта сновидений* \\({_esc(MODEL_LABEL)}\\)",
-        f"Всего снов: {total}",
+        f"Всего снов: {total} · в анализ вошло: {analyzed}",
         "",
     ]
     for p in patterns:

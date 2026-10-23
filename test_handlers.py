@@ -73,7 +73,7 @@ async def test_cmd_map_success_renders_patterns():
     ]
 
     with patch("handlers.map.db.count_dreams", return_value=5), \
-         patch("handlers.map.ai.generate_dream_map", return_value=patterns):
+         patch("handlers.map.ai.generate_dream_map", return_value=(patterns, 3)):
         await cmd_map(update, ctx)
 
     assert query.edit_message_text.await_count == 2
@@ -82,7 +82,7 @@ async def test_cmd_map_success_renders_patterns():
     assert "полёт" in result["text"]
     assert "3 сн\\." in result["text"]
     assert "лечу над городом" in result["text"]
-    assert "Всего снов: 5" in result["text"]
+    assert "Всего снов: 5 · в анализ вошло: 3" in result["text"]
     assert result["reply_markup"] is not None
 
 
@@ -92,7 +92,7 @@ async def test_cmd_map_without_patterns_shows_empty_state():
     ctx = SimpleNamespace(user_data={})
 
     with patch("handlers.map.db.count_dreams", return_value=2), \
-         patch("handlers.map.ai.generate_dream_map", return_value=[]):
+         patch("handlers.map.ai.generate_dream_map", return_value=([], 2)):
         await cmd_map(update, ctx)
 
     text = query.edit_message_text.await_args_list[-1].kwargs["text"]
@@ -165,7 +165,7 @@ async def test_cmd_map_splits_long_result():
     ]
 
     with patch("handlers.map.db.count_dreams", return_value=100), \
-         patch("handlers.map.ai.generate_dream_map", return_value=patterns):
+         patch("handlers.map.ai.generate_dream_map", return_value=(patterns, 100)):
         await cmd_map(update, ctx)
 
     assert query.message.reply_text.await_count >= 1

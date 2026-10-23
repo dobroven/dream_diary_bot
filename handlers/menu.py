@@ -50,7 +50,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"/list — список последних снов (с пагинацией)\n"
         f"/search &lt;запрос&gt; — поиск по ключевым словам\n"
         f"/delete &lt;#N|название&gt; — удалить сон по номеру или названию\n"
-        f"/cancel — отменить текущее действие\n"
+        f"/cancel — отменить добавление или редактирование\n"
         f"/help — эта справка\n\n"
         f"Также можно пользоваться кнопками в главном меню 🏠"
     )
@@ -66,6 +66,9 @@ async def menu_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     action = query.data.split(":")[1]
+
+    if action != "search":
+        ctx.user_data.pop("awaiting", None)
 
     if action == "main":
         await cmd_start(update, ctx)

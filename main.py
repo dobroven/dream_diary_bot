@@ -60,6 +60,11 @@ async def cmd_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+async def reset_search_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Любая команда выводит из режима поиска."""
+    ctx.user_data.pop("awaiting", None)
+
+
 def _validate_env() -> None:
     required = {
         "TELEGRAM_BOT_TOKEN": "Токен Telegram-бота",
@@ -103,6 +108,9 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cmd_cancel)],
     )
+
+    # Любая команда сбрасывает режим поиска до обработки самой команды.
+    app.add_handler(MessageHandler(filters.COMMAND, reset_search_mode), group=-1)
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help",  cmd_help))

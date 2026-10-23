@@ -10,11 +10,19 @@ from utils import _esc, MAG, dream_card
 log = logging.getLogger(__name__)
 
 
+MAIN_MENU = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]])
+
+
 async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not ctx.args:
+        ctx.user_data["awaiting"] = "search"
         await update.message.reply_text(
-            _esc(f"{MAG} Укажи ключевые слова:\n/search ключевое слово"),
+            _esc(
+                f"{MAG} Укажи ключевые слова:\n/search ключевое слово\n\n"
+                "Или отправь запрос следующим сообщением."
+            ),
             parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=MAIN_MENU,
         )
         return
 
@@ -23,12 +31,18 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     rows = db.search_dreams(user_id, query)
 
     if not rows:
+        # Оставляем режим поиска включённым: следующее сообщение станет
+        # новым запросом, без повторного нажатия кнопки «Поиск».
+        ctx.user_data["awaiting"] = "search"
         await update.message.reply_text(
-            f"{MAG} По запросу *{_esc(query)}* ничего не найдено\\.",
+            f"{MAG} По запросу *{_esc(query)}* ничего не найдено\\.\n\n"
+            f"Отправь другой запрос или нажми «🏠 Главная»\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=MAIN_MENU,
         )
         return
 
+    ctx.user_data.pop("awaiting", None)
     total = db.count_dreams(user_id)
     prefetch_note = ""
     if total > 1000:
@@ -46,12 +60,12 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "\n".join(lines),
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]]),
+        reply_markup=MAIN_MENU,
     )
 
 
 async def receive_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    awaiting = ctx.user_data.pop("awaiting", None)
+    awaiting = ctx.user_data.get("awaiting")
     if not awaiting:
         await update.message.reply_text(
             _esc("❓ Неизвестная команда. Используйте /help или кнопку в главном меню."),

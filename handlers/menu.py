@@ -20,10 +20,7 @@ def main_menu_markup() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📥 Добавить", callback_data="menu:add"),
             InlineKeyboardButton("📄 Список", callback_data="menu:list"),
         ],
-        [
-            InlineKeyboardButton("🔍 Поиск", callback_data="menu:search"),
-            InlineKeyboardButton("🗺 Карта снов", callback_data="menu:map"),
-        ],
+        [InlineKeyboardButton("🔍 Поиск", callback_data="menu:search")],
     ]
     return InlineKeyboardMarkup(buttons)
 

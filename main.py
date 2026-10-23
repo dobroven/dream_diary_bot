@@ -68,7 +68,7 @@ async def reset_search_mode(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
 def _validate_env() -> None:
     required = {
         "TELEGRAM_BOT_TOKEN": "Токен Telegram-бота",
-        "OPENCODE_API_KEY": "API-ключ OpenCode",
+        "ZVENOAI_API_KEY": "API-ключ ZvenoAI",
     }
     missing = [f"  {k} — {v}" for k, v in required.items() if not os.environ.get(k, "").strip()]
     if missing:
@@ -117,6 +117,7 @@ def main() -> None:
     app.add_handler(add_handler)
     app.add_handler(CommandHandler("list",   cmd_list))
     app.add_handler(CommandHandler("search", cmd_search))
+    app.add_handler(CommandHandler("map",    cmd_map))
     app.add_handler(CommandHandler("delete", cmd_delete))
     app.add_handler(CallbackQueryHandler(delete_callback, pattern=r"^delete:\d+$"))
     app.add_handler(CallbackQueryHandler(confirm_delete_callback, pattern=r"^confirm_delete:\d+:(yes|no)$"))

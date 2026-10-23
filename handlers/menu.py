@@ -20,7 +20,10 @@ def main_menu_markup() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📥 Добавить", callback_data="menu:add"),
             InlineKeyboardButton("📄 Список", callback_data="menu:list"),
         ],
-        [InlineKeyboardButton("🔍 Поиск", callback_data="menu:search")],
+        [
+            InlineKeyboardButton("🔍 Поиск", callback_data="menu:search"),
+            InlineKeyboardButton("🗺 Карта снов", callback_data="menu:map"),
+        ],
     ]
     return InlineKeyboardMarkup(buttons)
 
@@ -49,6 +52,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         f"/add — записать новый сон (название → описание)\n"
         f"/list — список последних снов (с пагинацией)\n"
         f"/search &lt;запрос&gt; — поиск по ключевым словам\n"
+        f"/map — карта снов (анализ повторяющихся паттернов)\n"
         f"/delete &lt;#N|название&gt; — удалить сон по номеру или названию\n"
         f"/cancel — отменить добавление или редактирование\n"
         f"/help — эта справка\n\n"

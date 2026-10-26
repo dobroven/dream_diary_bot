@@ -35,7 +35,7 @@ async def _notify(bot, user_id: int, result: ai.DreamMapResult) -> None:
     text = (
         "🗺 *Карта снов обновлена*\n"
         f"Период: {_esc(period)}\n"
-        "Нажми кнопку, чтобы посмотреть."
+        f"{_esc('Нажми кнопку, чтобы посмотреть.')}"
     )
 
     try:

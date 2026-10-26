@@ -59,6 +59,7 @@ async def test_refresh_due_maps_generates_saves_and_notifies():
     assert message["chat_id"] == 1
     assert "Карта снов обновлена" in message["text"]
     assert "27\\.09\\.2026 — 19\\.10\\.2026" in message["text"]
+    assert "посмотреть\\." in message["text"]
     assert message["reply_markup"] is not None
 
 

@@ -40,9 +40,19 @@ def init_db() -> None:
                 dreams_count  INTEGER NOT NULL,
                 period_start  TEXT    NOT NULL,
                 period_end    TEXT    NOT NULL,
+                last_dream_id INTEGER NOT NULL,
                 generated_at  TEXT    NOT NULL
             )
         """)
+        map_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(dream_maps)")
+        }
+        if "last_dream_id" not in map_columns:
+            conn.execute(
+                "ALTER TABLE dream_maps "
+                "ADD COLUMN last_dream_id INTEGER NOT NULL DEFAULT 0"
+            )
         conn.commit()
 
 
@@ -179,18 +189,23 @@ def save_dream_map(
     patterns_json = json.dumps(patterns, ensure_ascii=False)
     try:
         with get_connection() as conn:
+            last_dream_id = conn.execute(
+                "SELECT COALESCE(MAX(id), 0) FROM dreams WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()[0]
             conn.execute(
                 """
                 INSERT INTO dream_maps (
                     user_id, patterns_json, dreams_count,
-                    period_start, period_end, generated_at
+                    period_start, period_end, last_dream_id, generated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     patterns_json = excluded.patterns_json,
                     dreams_count  = excluded.dreams_count,
                     period_start  = excluded.period_start,
                     period_end    = excluded.period_end,
+                    last_dream_id = excluded.last_dream_id,
                     generated_at  = excluded.generated_at
                 """,
                 (
@@ -199,6 +214,7 @@ def save_dream_map(
                     dreams_count,
                     period_start,
                     period_end,
+                    last_dream_id,
                     generated_at,
                 ),
             )
@@ -215,7 +231,7 @@ def get_dream_map(user_id: int) -> sqlite3.Row | None:
             return conn.execute(
                 """
                 SELECT user_id, patterns_json, dreams_count,
-                       period_start, period_end, generated_at
+                       period_start, period_end, last_dream_id, generated_at
                 FROM dream_maps
                 WHERE user_id = ?
                 """,
@@ -229,9 +245,15 @@ def get_dream_map(user_id: int) -> sqlite3.Row | None:
 def list_users_due_for_map(
     interval_days: int = 14,
     min_dreams: int = 10,
+    min_new_dreams: int = 7,
     now: datetime | None = None,
 ) -> list[int]:
-    """Пользователи, которым пора обновить карту."""
+    """Пользователи, которым пора обновить карту.
+
+    Нужно не меньше `min_dreams` снов всего и не меньше `min_new_dreams`
+    новых снов с момента последней успешной генерации. Если кэша нет,
+    достаточно общего количества снов.
+    """
     now = now or datetime.now()
     cutoff = (now - timedelta(days=interval_days)).isoformat(timespec="seconds")
     try:
@@ -246,10 +268,21 @@ def list_users_due_for_map(
                 ) AS d
                 LEFT JOIN dream_maps AS m ON m.user_id = d.user_id
                 WHERE d.total >= ?
-                  AND (m.generated_at IS NULL OR m.generated_at <= ?)
+                  AND (
+                      m.user_id IS NULL
+                      OR (
+                          m.generated_at <= ?
+                          AND (
+                              SELECT COUNT(*)
+                              FROM dreams AS new_dreams
+                              WHERE new_dreams.user_id = d.user_id
+                                AND new_dreams.id > m.last_dream_id
+                          ) >= ?
+                      )
+                  )
                 ORDER BY d.user_id
                 """,
-                (min_dreams, cutoff),
+                (min_dreams, cutoff, min_new_dreams),
             ).fetchall()
             return [row["user_id"] for row in rows]
     except sqlite3.Error as e:

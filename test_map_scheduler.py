@@ -44,7 +44,7 @@ async def test_refresh_due_maps_generates_saves_and_notifies():
         generated = await map_scheduler.refresh_due_maps(bot)
 
     assert generated == [1]
-    due.assert_called_once_with(interval_days=14, min_dreams=10)
+    due.assert_called_once_with(interval_days=14, min_dreams=10, min_new_dreams=7)
     generate.assert_called_once_with(1, 10)
     save.assert_called_once_with(
         user_id=1,

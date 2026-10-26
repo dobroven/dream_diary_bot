@@ -263,6 +263,7 @@ def test_list_dreams_for_map_returns_all_if_fewer_than_14():
 
 
 def test_save_and_get_dream_map():
+    dream_id = db.add_dream(1, "Сон", "desc", "2026-10-19")
     patterns = [
         {
             "pattern": "полёт",
@@ -286,17 +287,23 @@ def test_save_and_get_dream_map():
     assert row["dreams_count"] == 14
     assert row["period_start"] == "2026-09-27"
     assert row["period_end"] == "2026-10-19"
+    assert row["last_dream_id"] == dream_id
     assert row["generated_at"] == "2026-10-26T09:00:00"
     assert json.loads(row["patterns_json"]) == patterns
 
 
-def test_save_dream_map_updates_existing_cache():
+def test_save_dream_map_updates_existing_cache_and_last_dream_id():
+    first_id = db.add_dream(1, "Первый", "desc", "2026-09-01")
     db.save_dream_map(1, [], 10, "2026-09-01", "2026-09-14")
+    assert db.get_dream_map(1)["last_dream_id"] == first_id
+
+    second_id = db.add_dream(1, "Второй", "desc", "2026-10-19")
     db.save_dream_map(1, [{"pattern": "вода", "count": 2}], 12, "2026-10-01", "2026-10-14")
 
     row = db.get_dream_map(1)
     assert row["dreams_count"] == 12
     assert row["period_start"] == "2026-10-01"
+    assert row["last_dream_id"] == second_id
     assert json.loads(row["patterns_json"]) == [{"pattern": "вода", "count": 2}]
 
     with db.get_connection() as conn:
@@ -307,25 +314,51 @@ def test_get_dream_map_returns_none_for_unknown_user():
     assert db.get_dream_map(999) is None
 
 
-def test_list_users_due_for_map_filters_by_minimum_and_interval():
+def test_list_users_due_for_map_requires_minimum_and_seven_new_dreams():
     now = datetime(2026, 10, 26, 12, 0, 0)
-    for user_id, count in ((1, 9), (2, 10), (3, 10), (4, 10), (5, 10)):
-        for i in range(count):
-            db.add_dream(user_id, f"Dream {i}", "desc", "2026-10-20")
 
+    def add_many(user_id: int, count: int) -> None:
+        for i in range(count):
+            db.add_dream(user_id, f"{user_id}-{i}", "desc", "2026-10-20")
+
+    # 1: всего 9 снов, кэша нет — рано.
+    add_many(1, 9)
+
+    # 2: всего 10 снов, кэша нет — первая карта.
+    add_many(2, 10)
+
+    # 3: 10 снов было, кэш 15 дней назад, после него 6 новых — мало.
+    add_many(3, 10)
     db.save_dream_map(
         3, [], 10, "2026-10-01", "2026-10-14",
-        generated_at=(now - timedelta(days=13)).isoformat(timespec="seconds"),
+        generated_at=(now - timedelta(days=15)).isoformat(timespec="seconds"),
     )
+    add_many(3, 6)
+
+    # 4: 10 снов было, кэш 15 дней назад, после него 7 новых — пора.
+    add_many(4, 10)
     db.save_dream_map(
         4, [], 10, "2026-09-01", "2026-09-14",
         generated_at=(now - timedelta(days=15)).isoformat(timespec="seconds"),
     )
+    add_many(4, 7)
+
+    # 5: 7 новых есть, но прошло только 13 дней — рано.
+    add_many(5, 10)
     db.save_dream_map(
         5, [], 10, "2026-10-01", "2026-10-14",
+        generated_at=(now - timedelta(days=13)).isoformat(timespec="seconds"),
+    )
+    add_many(5, 7)
+
+    # 6: ровно 14 дней и 7 новых — пора.
+    add_many(6, 10)
+    db.save_dream_map(
+        6, [], 10, "2026-10-01", "2026-10-14",
         generated_at=(now - timedelta(days=14)).isoformat(timespec="seconds"),
     )
+    add_many(6, 7)
 
     due = db.list_users_due_for_map(now=now)
 
-    assert due == [2, 4, 5]
+    assert due == [2, 4, 6]

@@ -13,6 +13,7 @@ import db
 from utils import (
     MAP_REFRESH_DAYS,
     MIN_DREAMS_FOR_MAP,
+    MIN_NEW_DREAMS_FOR_MAP,
     _esc,
     format_date,
 )
@@ -54,6 +55,7 @@ async def refresh_due_maps(bot=None) -> list[int]:
     user_ids = db.list_users_due_for_map(
         interval_days=MAP_REFRESH_DAYS,
         min_dreams=MIN_DREAMS_FOR_MAP,
+        min_new_dreams=MIN_NEW_DREAMS_FOR_MAP,
     )
 
     for user_id in user_ids:

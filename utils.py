@@ -2,6 +2,7 @@ from datetime import datetime
 from textwrap import shorten
 
 MIN_DREAMS_FOR_MAP = 10
+MIN_NEW_DREAMS_FOR_MAP = 7
 MAP_REFRESH_DAYS = 14
 MODEL_LABEL = "🧠 Nemotron 3.5 Super VL"
 

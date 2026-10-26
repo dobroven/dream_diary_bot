@@ -1,5 +1,9 @@
 .env
+.env.*
+!.env.example
 *.db
+*.sqlite
+*.sqlite3
 __pycache__/
 *.pyc
 .venv/
@@ -7,6 +11,23 @@ __pycache__/
 CLAUDE.md
 opencode.json
 DEEPSEEK.md
+
+# proxy / VPN configs
 proxy_config.json
+proxy_config*.json
+*proxy*config*
+clash*.yaml
+clash*.yml
+sing-box*.json
+vless*.json
+vmess*.json
+*.ovpn
+
+# keys
 ssh-key-*
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+*.p12
 ~

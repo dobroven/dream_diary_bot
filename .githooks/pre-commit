@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Блокирует коммиты с секретами, приватными ключами и конфигами прокси.
+# Включается один раз: git config core.hooksPath .githooks
+set -euo pipefail
+
+blocked_paths='(^|/)(\.env(\.[^/]+)?$|.*\.(db|sqlite|sqlite3|pem|key|p12|ovpn)$|proxy_config.*|.*proxy.*config.*|clash.*|sing-box.*|vless.*|vmess.*|id_rsa.*|id_ed25519.*|ssh-key-.*)'
+blocked_content='(-----BEGIN [A-Z ]*PRIVATE KEY-----|"uuid"[[:space:]]*:[[:space:]]*"[0-9a-fA-F-]{20,}"|(vless|vmess|trojan)://|sk-[A-Za-z0-9]{20,}|[0-9]{6,}:[A-Za-z0-9_-]{30,})'
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+status=0
+
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    [ "$file" = ".env.example" ] && continue
+    if printf '%s' "$file" | grep -Eq "$blocked_paths"; then
+        echo "pre-commit: запрещено коммитить чувствительный файл: $file" >&2
+        status=1
+    fi
+done <<< "$staged"
+
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    case "$file" in
+        .env.example|.githooks/*) continue ;;
+    esac
+    if git show ":$file" 2>/dev/null | grep -Eq "$blocked_content"; then
+        echo "pre-commit: похоже на секрет в файле: $file" >&2
+        status=1
+    fi
+done <<< "$staged"
+
+if [ "$status" -ne 0 ]; then
+    echo "pre-commit: коммит отменён. Уберите секрет или добавьте файл в .gitignore." >&2
+    exit 1
+fi

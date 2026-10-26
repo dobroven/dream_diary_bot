@@ -1,0 +1,32 @@
+# Secrets and local data must never end up in a Docker image
+.git
+.gitignore
+.githooks
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+ssh-key-*
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+*.p12
+proxy_config*.json
+*proxy*config*
+clash*.yaml
+clash*.yml
+sing-box*.json
+vless*.json
+vmess*.json
+*.ovpn
+
+# Local/dev artifacts
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+DEEPSEEK.md
+~

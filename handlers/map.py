@@ -1,19 +1,14 @@
-import asyncio
+import json
 import logging
 
-from openai import APIStatusError, RateLimitError
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
-from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-import ai
 import db
-from utils import BOOK, _esc
+from utils import BOOK, MIN_DREAMS_FOR_MAP, MODEL_LABEL, _esc, format_date
 
 log = logging.getLogger(__name__)
-
-MODEL_LABEL = "🧠 Nemotron 3.5 Super VL"
 
 MAIN_MENU = InlineKeyboardMarkup(
     [[InlineKeyboardButton("🏠 Главная", callback_data="menu:main")]]
@@ -68,97 +63,77 @@ async def _send_result(update: Update, text: str) -> None:
             await _follow(update, part, markup)
 
 
+def _cached_patterns(raw: str) -> list[dict]:
+    data = json.loads(raw)
+    if not isinstance(data, list):
+        raise ValueError("patterns_json is not a list")
+    return [item for item in data if isinstance(item, dict)]
+
+
 async def cmd_map(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     total = db.count_dreams(user_id)
+    cached = db.get_dream_map(user_id)
 
-    if total == 0:
-        await _replace(
-            update,
-            _esc(f"{BOOK} Сначала запиши хотя бы один сон через кнопку «Добавить»."),
-            MAIN_MENU,
-        )
-        return
-
-    try:
-        await _replace(
-            update,
-            _esc(
-                f"🗺 {MODEL_LABEL} — составляю карту твоих снов… "
-                "Это может занять до двух минут."
-            ),
-        )
-    except BadRequest:
-        # Повторное нажатие на кнопку: сообщение уже содержит этот статус.
-        pass
-
-    try:
-        patterns, analyzed = await asyncio.to_thread(ai.generate_dream_map, user_id)
-    except RateLimitError as e:
-        log.warning("ZvenoAI ограничил запросы при генерации карты снов: %s", e)
-        await _replace(
-            update,
-            _esc(
-                "⏳ ZvenoAI временно ограничил запросы. Попробуй позже."
-            ),
-            MAIN_MENU,
-        )
-        return
-    except APIStatusError as e:
-        if e.status_code == 402:
-            log.warning("Недостаточно средств на балансе ZvenoAI: %s", e)
-            await _replace(
-                update,
-                _esc(
-                    "💳 Недостаточно средств на балансе ZvenoAI. "
-                    "Пополни баланс и попробуй снова."
-                ),
-                MAIN_MENU,
+    if cached is None:
+        if total < MIN_DREAMS_FOR_MAP:
+            text = (
+                f"{BOOK} Для карты нужно минимум {MIN_DREAMS_FOR_MAP} снов. "
+                f"Сейчас: {total}."
             )
-            return
-        log.exception("Ошибка API ZvenoAI при генерации карты снов: %s", e)
-        await _replace(
-            update,
-            _esc("❌ Сервис ZvenoAI вернул ошибку. Попробуй позже."),
-            MAIN_MENU,
-        )
+        else:
+            text = (
+                "🗺 Карта ещё не составлена. "
+                "Она появится после ближайшего автоматического обновления."
+            )
+        await _replace(update, _esc(text), MAIN_MENU)
         return
-    except Exception as e:
-        log.exception("Ошибка при генерации карты снов: %s", e)
+
+    try:
+        patterns = _cached_patterns(cached["patterns_json"])
+    except (TypeError, ValueError) as e:
+        log.exception("Не удалось прочитать сохранённую карту снов: %s", e)
         await _replace(
             update,
-            _esc("❌ Произошла ошибка при составлении карты. Попробуй позже."),
+            _esc("❌ Не удалось прочитать сохранённую карту. Попробуй позже."),
             MAIN_MENU,
         )
         return
 
-    if not patterns:
-        await _replace(
-            update,
-            _esc(
-                "🗺 Повторяющихся паттернов не найдено. "
-                "Добавь ещё снов и попробуй снова."
-            ),
-            MAIN_MENU,
-        )
-        return
+    updated = format_date(str(cached["generated_at"]))
+    period_start = format_date(str(cached["period_start"]))
+    period_end = format_date(str(cached["period_end"]))
+    period = f"{period_start} — {period_end}" if period_start and period_end else "—"
 
     lines = [
         f"🗺 *Карта сновидений* \\({_esc(MODEL_LABEL)}\\)",
-        f"Всего снов: {total} · в анализ вошло: {analyzed}",
-        "",
+        f"Обновлено: {_esc(updated)}",
+        f"Сны за период: {_esc(period)}",
+        f"Всего снов: {total} · в анализ вошло: {cached['dreams_count']}",
     ]
-    for p in patterns:
-        pattern = p.get("pattern", "?")
-        count = p.get("count", 0)
-        desc = p.get("description", "")
-        examples = p.get("examples", [])
+    if total < MIN_DREAMS_FOR_MAP:
+        lines.append(
+            _esc(
+                f"Сейчас снов: {total}. "
+                f"Для новой карты нужно минимум {MIN_DREAMS_FOR_MAP}."
+            )
+        )
+    lines.append("")
 
-        lines.append(f"🔁 *{_esc(str(pattern))}* — {count} сн\\.")
-        if desc:
-            lines.append(_esc(str(desc)))
-        for ex in examples:
-            lines.append(f"▸ {_esc(str(ex))}")
-        lines.append("")
+    if not patterns:
+        lines.append(_esc("Повторяющихся паттернов не найдено."))
+    else:
+        for p in patterns:
+            pattern = p.get("pattern", "?")
+            count = p.get("count", 0)
+            desc = p.get("description", "")
+            examples = p.get("examples", [])
+
+            lines.append(f"🔁 *{_esc(str(pattern))}* — {count} сн\\.")
+            if desc:
+                lines.append(_esc(str(desc)))
+            for ex in examples:
+                lines.append(f"▸ {_esc(str(ex))}")
+            lines.append("")
 
     await _send_result(update, "\n".join(lines))

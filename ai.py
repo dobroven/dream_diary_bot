@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,14 @@ DREAM_MAP_MODEL = "nvidia/nemotron-3.5-super-vl"
 REQUEST_TIMEOUT = 180.0
 
 _client = None
+
+
+@dataclass
+class DreamMapResult:
+    patterns: list[dict]
+    dreams_count: int
+    period_start: str
+    period_end: str
 
 
 def _get_client() -> OpenAI:
@@ -162,10 +171,10 @@ def validate_dream_map(patterns: list[dict]) -> list[dict]:
     return result[:15]
 
 
-def generate_dream_map(user_id: int) -> tuple[list[dict], int]:
+def generate_dream_map(user_id: int, min_dreams: int = 0) -> DreamMapResult:
     dreams = db.list_dreams_for_map(user_id)
-    if not dreams:
-        return [], 0
+    if not dreams or len(dreams) < min_dreams:
+        return DreamMapResult([], len(dreams), "", "")
 
     prompt_text = DREAM_MAP_PATH.read_text(encoding="utf-8")
     summary = SUMMARY_PATH.read_text(encoding="utf-8") if SUMMARY_PATH.exists() else ""
@@ -192,4 +201,9 @@ def generate_dream_map(user_id: int) -> tuple[list[dict], int]:
 
     raw = _call_llm(prompt_text, user_content, DREAM_MAP_MODEL).strip()
     patterns = validate_dream_map(_parse_patterns(raw))
-    return patterns, len(dreams)
+    return DreamMapResult(
+        patterns=patterns,
+        dreams_count=len(dreams),
+        period_start=min(row["date"] for row in dreams),
+        period_end=max(row["date"] for row in dreams),
+    )

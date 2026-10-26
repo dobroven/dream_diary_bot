@@ -1,6 +1,7 @@
+import json
 import logging
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,16 @@ def init_db() -> None:
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_dreams_user_date
             ON dreams (user_id, date DESC)
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS dream_maps (
+                user_id       INTEGER PRIMARY KEY,
+                patterns_json TEXT    NOT NULL,
+                dreams_count  INTEGER NOT NULL,
+                period_start  TEXT    NOT NULL,
+                period_end    TEXT    NOT NULL,
+                generated_at  TEXT    NOT NULL
+            )
         """)
         conn.commit()
 
@@ -152,6 +163,97 @@ def list_dreams_for_map(
             return recent + earlier
     except sqlite3.Error as e:
         log.exception("Ошибка при загрузке снов для карты: %s", e)
+        return []
+
+
+def save_dream_map(
+    user_id: int,
+    patterns: list[dict],
+    dreams_count: int,
+    period_start: str,
+    period_end: str,
+    generated_at: str | None = None,
+) -> bool:
+    """Сохраняет последнюю карту снов пользователя."""
+    generated_at = generated_at or datetime.now().isoformat(timespec="seconds")
+    patterns_json = json.dumps(patterns, ensure_ascii=False)
+    try:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO dream_maps (
+                    user_id, patterns_json, dreams_count,
+                    period_start, period_end, generated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    patterns_json = excluded.patterns_json,
+                    dreams_count  = excluded.dreams_count,
+                    period_start  = excluded.period_start,
+                    period_end    = excluded.period_end,
+                    generated_at  = excluded.generated_at
+                """,
+                (
+                    user_id,
+                    patterns_json,
+                    dreams_count,
+                    period_start,
+                    period_end,
+                    generated_at,
+                ),
+            )
+            conn.commit()
+            return True
+    except sqlite3.Error as e:
+        log.exception("Ошибка при сохранении карты снов: %s", e)
+        return False
+
+
+def get_dream_map(user_id: int) -> sqlite3.Row | None:
+    try:
+        with get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT user_id, patterns_json, dreams_count,
+                       period_start, period_end, generated_at
+                FROM dream_maps
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+    except sqlite3.Error as e:
+        log.exception("Ошибка при загрузке карты снов: %s", e)
+        return None
+
+
+def list_users_due_for_map(
+    interval_days: int = 14,
+    min_dreams: int = 10,
+    now: datetime | None = None,
+) -> list[int]:
+    """Пользователи, которым пора обновить карту."""
+    now = now or datetime.now()
+    cutoff = (now - timedelta(days=interval_days)).isoformat(timespec="seconds")
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT d.user_id
+                FROM (
+                    SELECT user_id, COUNT(*) AS total
+                    FROM dreams
+                    GROUP BY user_id
+                ) AS d
+                LEFT JOIN dream_maps AS m ON m.user_id = d.user_id
+                WHERE d.total >= ?
+                  AND (m.generated_at IS NULL OR m.generated_at <= ?)
+                ORDER BY d.user_id
+                """,
+                (min_dreams, cutoff),
+            ).fetchall()
+            return [row["user_id"] for row in rows]
+    except sqlite3.Error as e:
+        log.exception("Ошибка при поиске пользователей для карты: %s", e)
         return []
 
 

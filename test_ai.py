@@ -98,11 +98,36 @@ def test_generate_dream_map_uses_parser():
 
     with patch("ai.db.list_dreams_for_map", return_value=dreams), \
          patch("ai._call_llm", return_value=raw):
-        patterns, analyzed = ai.generate_dream_map(1)
+        result = ai.generate_dream_map(1)
 
-    assert analyzed == 2
-    assert len(patterns) == 1
-    assert patterns[0]["pattern"] == "полёт"
+    assert result.dreams_count == 2
+    assert result.period_start == "2026-01-01"
+    assert result.period_end == "2026-01-02"
+    assert len(result.patterns) == 1
+    assert result.patterns[0]["pattern"] == "полёт"
+
+
+def test_generate_dream_map_without_dreams_returns_empty_result():
+    with patch("ai.db.list_dreams_for_map", return_value=[]), \
+         patch("ai._call_llm") as call:
+        result = ai.generate_dream_map(1)
+
+    assert result == ai.DreamMapResult([], 0, "", "")
+    call.assert_not_called()
+
+
+def test_generate_dream_map_skips_model_below_minimum():
+    dreams = [
+        {"date": "2026-01-01", "title": "Первый", "description": "Текст."},
+        {"date": "2026-01-02", "title": "Второй", "description": "Текст."},
+    ]
+
+    with patch("ai.db.list_dreams_for_map", return_value=dreams), \
+         patch("ai._call_llm") as call:
+        result = ai.generate_dream_map(1, min_dreams=10)
+
+    assert result == ai.DreamMapResult([], 2, "", "")
+    call.assert_not_called()
 
 
 def test_get_client_requires_api_key(monkeypatch):

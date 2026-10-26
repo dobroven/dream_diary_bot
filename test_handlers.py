@@ -1,9 +1,8 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
-from openai import APIStatusError, RateLimitError
 
 from handlers.map import cmd_map
 
@@ -31,36 +30,54 @@ def _message_update():
     return update, message
 
 
-def _rate_limit_error() -> RateLimitError:
-    request = httpx.Request("POST", "https://api.zveno.ai/v1/chat/completions")
-    response = httpx.Response(429, request=request)
-    return RateLimitError("rate limit", response=response, body=None)
-
-
-def _payment_required_error() -> APIStatusError:
-    request = httpx.Request("POST", "https://api.zveno.ai/v1/chat/completions")
-    response = httpx.Response(402, request=request)
-    return APIStatusError("payment required", response=response, body=None)
+def _cached(
+    patterns=None,
+    dreams_count=14,
+    period_start="2026-09-27",
+    period_end="2026-10-19",
+    generated_at="2026-10-26T09:00:00",
+):
+    return {
+        "patterns_json": json.dumps(patterns or [], ensure_ascii=False),
+        "dreams_count": dreams_count,
+        "period_start": period_start,
+        "period_end": period_end,
+        "generated_at": generated_at,
+    }
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_without_dreams_shows_hint():
+async def test_cmd_map_without_dreams_shows_minimum_hint():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
 
     with patch("handlers.map.db.count_dreams", return_value=0), \
-         patch("handlers.map.ai.generate_dream_map") as generate:
+         patch("handlers.map.db.get_dream_map", return_value=None):
         await cmd_map(update, ctx)
 
-    generate.assert_not_called()
     query.edit_message_text.assert_awaited_once()
     text = query.edit_message_text.call_args.kwargs["text"]
-    assert "Сначала запиши" in text
+    assert "минимум 10" in text
+    assert "Сейчас: 0" in text
     assert query.edit_message_text.call_args.kwargs["reply_markup"] is not None
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_success_renders_patterns():
+async def test_cmd_map_without_cache_with_enough_dreams_reports_pending():
+    update, query = _callback_update()
+    ctx = SimpleNamespace(user_data={})
+
+    with patch("handlers.map.db.count_dreams", return_value=12), \
+         patch("handlers.map.db.get_dream_map", return_value=None):
+        await cmd_map(update, ctx)
+
+    text = query.edit_message_text.call_args.kwargs["text"]
+    assert "ещё не составлена" in text
+    assert "автоматического обновления" in text
+
+
+@pytest.mark.asyncio
+async def test_cmd_map_reads_cached_result_with_dates():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
     patterns = [
@@ -72,71 +89,67 @@ async def test_cmd_map_success_renders_patterns():
         }
     ]
 
-    with patch("handlers.map.db.count_dreams", return_value=5), \
-         patch("handlers.map.ai.generate_dream_map", return_value=(patterns, 3)):
+    with patch("handlers.map.db.count_dreams", return_value=25), \
+         patch("handlers.map.db.get_dream_map", return_value=_cached(patterns)):
         await cmd_map(update, ctx)
 
-    assert query.edit_message_text.await_count == 2
-    result = query.edit_message_text.await_args_list[-1].kwargs
-    assert "Карта сновидений" in result["text"]
-    assert "полёт" in result["text"]
-    assert "3 сн\\." in result["text"]
-    assert "лечу над городом" in result["text"]
-    assert "Всего снов: 5 · в анализ вошло: 3" in result["text"]
+    query.edit_message_text.assert_awaited_once()
+    result = query.edit_message_text.await_args.kwargs
+    text = result["text"]
+    assert "Карта сновидений" in text
+    assert "Обновлено: 26\\.10\\.2026" in text
+    assert "27\\.09\\.2026 — 19\\.10\\.2026" in text
+    assert "Всего снов: 25 · в анализ вошло: 14" in text
+    assert "полёт" in text
+    assert "3 сн\\." in text
+    assert "лечу над городом" in text
     assert result["reply_markup"] is not None
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_without_patterns_shows_empty_state():
+async def test_cmd_map_with_cached_empty_result_shows_empty_state():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
 
-    with patch("handlers.map.db.count_dreams", return_value=2), \
-         patch("handlers.map.ai.generate_dream_map", return_value=([], 2)):
+    with patch("handlers.map.db.count_dreams", return_value=10), \
+         patch("handlers.map.db.get_dream_map", return_value=_cached([])):
         await cmd_map(update, ctx)
 
-    text = query.edit_message_text.await_args_list[-1].kwargs["text"]
+    text = query.edit_message_text.await_args.kwargs["text"]
     assert "Повторяющихся паттернов не найдено" in text
-    assert query.edit_message_text.await_args_list[-1].kwargs["reply_markup"] is not None
+    assert query.edit_message_text.await_args.kwargs["reply_markup"] is not None
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_handles_unexpected_error():
+async def test_cmd_map_shows_old_cache_below_minimum_with_note():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
+    patterns = [{"pattern": "вода", "count": 2, "examples": [], "description": ""}]
 
-    with patch("handlers.map.db.count_dreams", return_value=2), \
-         patch("handlers.map.ai.generate_dream_map", side_effect=RuntimeError("boom")):
+    with patch("handlers.map.db.count_dreams", return_value=5), \
+         patch("handlers.map.db.get_dream_map", return_value=_cached(patterns)):
         await cmd_map(update, ctx)
 
-    text = query.edit_message_text.await_args_list[-1].kwargs["text"]
-    assert "Произошла ошибка" in text
+    text = query.edit_message_text.await_args.kwargs["text"]
+    assert "вода" in text
+    assert "Сейчас снов: 5" in text
+    assert "минимум 10" in text
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_handles_rate_limit():
+async def test_cmd_map_handles_corrupt_cache():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
+    cached = _cached()
+    cached["patterns_json"] = "не JSON"
 
-    with patch("handlers.map.db.count_dreams", return_value=2), \
-         patch("handlers.map.ai.generate_dream_map", side_effect=_rate_limit_error()):
+    with patch("handlers.map.db.count_dreams", return_value=10), \
+         patch("handlers.map.db.get_dream_map", return_value=cached):
         await cmd_map(update, ctx)
 
-    text = query.edit_message_text.await_args_list[-1].kwargs["text"]
-    assert "ограничил запросы" in text
-
-
-@pytest.mark.asyncio
-async def test_cmd_map_handles_payment_required():
-    update, query = _callback_update()
-    ctx = SimpleNamespace(user_data={})
-
-    with patch("handlers.map.db.count_dreams", return_value=2), \
-         patch("handlers.map.ai.generate_dream_map", side_effect=_payment_required_error()):
-        await cmd_map(update, ctx)
-
-    text = query.edit_message_text.await_args_list[-1].kwargs["text"]
-    assert "Недостаточно средств" in text
+    text = query.edit_message_text.await_args.kwargs["text"]
+    assert "Не удалось прочитать" in text
+    assert query.edit_message_text.await_args.kwargs["reply_markup"] is not None
 
 
 @pytest.mark.asyncio
@@ -144,28 +157,32 @@ async def test_cmd_map_works_as_command():
     update, message = _message_update()
     ctx = SimpleNamespace(user_data={})
 
-    with patch("handlers.map.db.count_dreams", return_value=0):
+    with patch("handlers.map.db.count_dreams", return_value=0), \
+         patch("handlers.map.db.get_dream_map", return_value=None):
         await cmd_map(update, ctx)
 
     message.reply_text.assert_awaited_once()
-    assert "Сначала запиши" in message.reply_text.call_args.kwargs["text"]
+    assert "минимум 10" in message.reply_text.call_args.kwargs["text"]
 
 
 @pytest.mark.asyncio
-async def test_cmd_map_splits_long_result():
+async def test_cmd_map_splits_long_cached_result():
     update, query = _callback_update()
     ctx = SimpleNamespace(user_data={})
     patterns = [
         {
             "pattern": "длинный паттерн",
             "count": 100,
-            "examples": ["пример номер один с несколькими словами"] * 100,
+            "examples": ["пример номер один с несколькими словами"] * 150,
             "description": "Описание.",
         }
     ]
 
     with patch("handlers.map.db.count_dreams", return_value=100), \
-         patch("handlers.map.ai.generate_dream_map", return_value=(patterns, 100)):
+         patch(
+             "handlers.map.db.get_dream_map",
+             return_value=_cached(patterns, dreams_count=100),
+         ):
         await cmd_map(update, ctx)
 
     assert query.message.reply_text.await_count >= 1

@@ -7,7 +7,7 @@ Dream Diary Bot
 /search  — поиск по ключевым словам
 /delete  — удалить сон по названию
 /edit    — редактировать сон
-/map     — карта снов (анализ паттернов)
+/map     — последняя карта снов (обновляется автоматически)
 /cancel  — отменить текущее действие
 """
 
@@ -43,6 +43,7 @@ from handlers.delete import cmd_delete, delete_callback, confirm_delete_callback
 from handlers.edit import edit_callback, cmd_edit, edit_title, edit_desc, edit_date
 from handlers.map import cmd_map
 from handlers.voice import handle_voice
+from map_scheduler import start_map_scheduler, stop_map_scheduler
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -94,7 +95,12 @@ def main() -> None:
         log.info("Прокси: %s", proxy_url)
     else:
         builder = Application.builder().token(token)
-    app = builder.build()
+    app = (
+        builder
+        .post_init(start_map_scheduler)
+        .post_shutdown(stop_map_scheduler)
+        .build()
+    )
 
     # /add conversation
     add_handler = ConversationHandler(

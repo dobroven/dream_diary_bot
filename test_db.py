@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+import json
 import os
 import tempfile
 import pytest
@@ -259,3 +260,72 @@ def test_list_dreams_for_map_returns_all_if_fewer_than_14():
     rows = db.list_dreams_for_map(1, today=today)
 
     assert len(rows) == 10
+
+
+def test_save_and_get_dream_map():
+    patterns = [
+        {
+            "pattern": "полёт",
+            "count": 3,
+            "examples": ["лечу над городом"],
+            "description": "Полёты во сне.",
+        }
+    ]
+
+    assert db.save_dream_map(
+        1,
+        patterns,
+        14,
+        "2026-09-27",
+        "2026-10-19",
+        generated_at="2026-10-26T09:00:00",
+    ) is True
+
+    row = db.get_dream_map(1)
+    assert row is not None
+    assert row["dreams_count"] == 14
+    assert row["period_start"] == "2026-09-27"
+    assert row["period_end"] == "2026-10-19"
+    assert row["generated_at"] == "2026-10-26T09:00:00"
+    assert json.loads(row["patterns_json"]) == patterns
+
+
+def test_save_dream_map_updates_existing_cache():
+    db.save_dream_map(1, [], 10, "2026-09-01", "2026-09-14")
+    db.save_dream_map(1, [{"pattern": "вода", "count": 2}], 12, "2026-10-01", "2026-10-14")
+
+    row = db.get_dream_map(1)
+    assert row["dreams_count"] == 12
+    assert row["period_start"] == "2026-10-01"
+    assert json.loads(row["patterns_json"]) == [{"pattern": "вода", "count": 2}]
+
+    with db.get_connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM dream_maps").fetchone()[0] == 1
+
+
+def test_get_dream_map_returns_none_for_unknown_user():
+    assert db.get_dream_map(999) is None
+
+
+def test_list_users_due_for_map_filters_by_minimum_and_interval():
+    now = datetime(2026, 10, 26, 12, 0, 0)
+    for user_id, count in ((1, 9), (2, 10), (3, 10), (4, 10), (5, 10)):
+        for i in range(count):
+            db.add_dream(user_id, f"Dream {i}", "desc", "2026-10-20")
+
+    db.save_dream_map(
+        3, [], 10, "2026-10-01", "2026-10-14",
+        generated_at=(now - timedelta(days=13)).isoformat(timespec="seconds"),
+    )
+    db.save_dream_map(
+        4, [], 10, "2026-09-01", "2026-09-14",
+        generated_at=(now - timedelta(days=15)).isoformat(timespec="seconds"),
+    )
+    db.save_dream_map(
+        5, [], 10, "2026-10-01", "2026-10-14",
+        generated_at=(now - timedelta(days=14)).isoformat(timespec="seconds"),
+    )
+
+    due = db.list_users_due_for_map(now=now)
+
+    assert due == [2, 4, 5]
